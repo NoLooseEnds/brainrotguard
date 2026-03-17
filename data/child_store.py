@@ -65,7 +65,7 @@ class ChildStore:
     def search_approved(self, query, limit=50):
         return self._store.search_approved(query, limit, profile_id=self.profile_id)
 
-    def get_recent_requests(self, limit=50):
+    def get_recent_requests(self, limit=0):
         return self._store.get_recent_requests(limit, profile_id=self.profile_id)
 
     def update_status(self, video_id, status):

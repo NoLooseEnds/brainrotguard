@@ -517,14 +517,20 @@ class VideoStore:
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_recent_requests(self, limit: int = 50, profile_id: str = "default") -> list[dict]:
-        """Get recently approved non-Short videos for a profile."""
+    def get_recent_requests(self, limit: int = 0, profile_id: str = "default") -> list[dict]:
+        """Get recently approved non-Short videos for a profile.
+
+        Limit is applied after the query; callers that filter rows (e.g. by
+        allowed channels) should pass limit=0 so filtering doesn't lose results.
+        """
         with self._lock:
-            cursor = self.conn.execute(
-                "SELECT * FROM videos WHERE status = 'approved' AND is_short = 0 AND profile_id = ? "
-                "ORDER BY decided_at DESC, requested_at DESC LIMIT ?",
-                (profile_id, limit),
-            )
+            sql = ("SELECT * FROM videos WHERE status = 'approved' AND is_short = 0 AND profile_id = ? "
+                   "ORDER BY decided_at DESC, requested_at DESC")
+            params: list = [profile_id]
+            if limit:
+                sql += " LIMIT ?"
+                params.append(limit)
+            cursor = self.conn.execute(sql, params)
             return [dict(row) for row in cursor.fetchall()]
 
     def update_status(self, video_id: str, status: str, profile_id: str = "default") -> bool:

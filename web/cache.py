@@ -317,12 +317,17 @@ def build_shorts_catalog(state, profile_id: str = "default") -> list[dict]:
 
 
 def build_requests_row(state, limit: int = 50, profile_id: str = "default") -> list[dict]:
-    """Build 'Your Requests' row from DB-approved non-Short videos for a profile."""
+    """Build 'Your Requests' row from DB-approved non-Short videos for a profile.
+
+    Fetches all approved videos first, then filters out allowed-channel videos,
+    then applies the limit. This avoids the SQL LIMIT discarding results that
+    would survive filtering.
+    """
     vs = getattr(state, "video_store", None)
     if not vs:
         return []
     child_store = ChildStore(vs, profile_id)
-    requests = child_store.get_recent_requests(limit=limit)
+    requests = child_store.get_recent_requests()
     allowed_channel_ids = set()
     allowed_names = set()
     for ch_name, cid, _h, _cat in child_store.get_channels_with_ids("allowed"):
@@ -346,7 +351,7 @@ def build_requests_row(state, limit: int = 50, profile_id: str = "default") -> l
     if wf:
         filtered = [v for v in filtered if not title_matches_filter(v.get("title", ""), wf)]
 
-    return filtered
+    return filtered[:limit] if limit else filtered
 
 
 def build_catalog(state, channel_filter: str = "", profile_id: str = "default") -> list[dict]:
