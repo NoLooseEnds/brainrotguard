@@ -154,7 +154,7 @@ TRANSLATIONS: dict[str, str] = {
     "Resending...": "Sender på nytt...",
     "Approved!": "Godkjent!",
     "Denied.": "Avslått.",
-    "Revoked!": "Avslått!",
+    "Revoked!": "Fjernet!",
     "Blocked: {channel}": "Blokkert: {channel}",
     "AUTO-APPROVED ({category})": "AUTOGODKJENT ({category})",
     "APPROVED": "GODKJENT",

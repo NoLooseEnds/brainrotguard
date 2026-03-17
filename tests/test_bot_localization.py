@@ -202,6 +202,6 @@ def test_revoke_toast_uses_dedicated_localized_key(tmp_path):
 
         asyncio.run(_run())
 
-        assert query.answers == ["Avslått!"]
+        assert query.answers == ["Fjernet!"]
     finally:
         store.close()
