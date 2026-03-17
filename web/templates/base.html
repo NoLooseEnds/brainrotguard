@@ -4,12 +4,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="application-name" content="BrainRotGuard">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="BrainRotGuard">
+    <meta name="format-detection" content="telephone=no">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0f0f23">
     <title>{% block title %}BrainRotGuard{% endblock %}</title>
     <link rel="icon" href="/static/favicon-32.png" type="image/png" sizes="32x32">
     <link rel="apple-touch-icon" href="/static/favicon.png">
+    <link rel="manifest" href="/manifest.webmanifest">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -67,6 +72,21 @@
         <a href="https://ko-fi.com/coffee4jj" target="_blank" rel="noopener">☕ {{ t("Buy me a coffee") }}</a>
     </footer>
     {% block scripts %}{% endblock %}
+    <script>
+    (function () {
+        var standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+        document.documentElement.classList.toggle("display-standalone", !!standalone);
+        document.documentElement.dataset.displayMode = standalone ? "standalone" : "browser";
+
+        var canRegisterWorker = "serviceWorker" in navigator
+            && (window.isSecureContext || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+        if (canRegisterWorker) {
+            window.addEventListener("load", function () {
+                navigator.serviceWorker.register("/service-worker.js").catch(function () {});
+            });
+        }
+    })();
+    </script>
     <script>
     (function(){
         var backText = {{ t("Back") | tojson }};

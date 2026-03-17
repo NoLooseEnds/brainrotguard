@@ -38,7 +38,7 @@ async def search_videos(request: Request, q: str = Query("", max_length=200)):
         if any(p.search(q) for p in word_patterns):
             cs.record_search(q, 0)
             csrf_token = get_csrf_token(request)
-            return templates.TemplateResponse("search.html", {
+            return templates.TemplateResponse(request, "search.html", {
                 **base_ctx(request),
                 "results": [],
                 "query": q,
@@ -80,7 +80,7 @@ async def search_videos(request: Request, q: str = Query("", max_length=200)):
     csrf_token = get_csrf_token(request)
     locale = getattr(request.app.state, "locale", "en")
     error_message = t(locale, _ERROR_MESSAGES["fetch_failed"]) if fetch_failed else ""
-    return templates.TemplateResponse("search.html", {
+    return templates.TemplateResponse(request, "search.html", {
         **base_ctx(request),
         "results": results,
         "query": q,
@@ -152,7 +152,7 @@ async def request_video(
             )
             cs.update_status(video_id, "denied")
             invalidate_catalog_cache(state)
-            return templates.TemplateResponse("denied.html", {
+            return templates.TemplateResponse(request, "denied.html", {
                 **base_ctx(request),
                 "video": cs.get_video(video_id),
             })

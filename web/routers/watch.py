@@ -34,14 +34,14 @@ async def pending_video(request: Request, video_id: str):
     if video["status"] == "approved":
         return RedirectResponse(url=f"/watch/{video_id}", status_code=303)
     elif video["status"] == "denied":
-        return templates.TemplateResponse("denied.html", {
+        return templates.TemplateResponse(request, "denied.html", {
             **base_ctx(request),
             "video": video,
         })
     else:
         w_cfg = request.app.state.web_config
         poll_interval = w_cfg.poll_interval if w_cfg else 3000
-        return templates.TemplateResponse("pending.html", {
+        return templates.TemplateResponse(request, "pending.html", {
             **base_ctx(request),
             "video": video,
             "poll_interval": poll_interval,
@@ -98,7 +98,7 @@ async def watch_video(request: Request, video_id: str):
                 if not info["exceeded"] and c != video_cat:
                     c_label = category_label(c, locale)
                     available.append({"name": c, "label": c_label, "remaining_min": info["remaining_min"]})
-            return templates.TemplateResponse("timesup.html", {
+            return templates.TemplateResponse(request, "timesup.html", {
                 **base,
                 "time_info": cat_budget,
                 "category": cat_label,
@@ -110,7 +110,7 @@ async def watch_video(request: Request, video_id: str):
     else:
         time_info = get_time_limit_info(store=cs, wl_cfg=wl_cfg)
         if time_info and time_info["exceeded"]:
-            return templates.TemplateResponse("timesup.html", {
+            return templates.TemplateResponse(request, "timesup.html", {
                 **base,
                 "time_info": time_info,
                 "next_start": get_next_start_time(store=cs, wl_cfg=wl_cfg),
@@ -118,7 +118,7 @@ async def watch_video(request: Request, video_id: str):
 
     schedule_info = get_schedule_info(store=cs, wl_cfg=wl_cfg)
     if schedule_info and not schedule_info["allowed"]:
-        return templates.TemplateResponse("outsidehours.html", {
+        return templates.TemplateResponse(request, "outsidehours.html", {
             **base,
             "schedule_info": schedule_info,
         })
@@ -128,7 +128,7 @@ async def watch_video(request: Request, video_id: str):
 
     embed_url = f"https://www.youtube-nocookie.com/embed/{video_id}?enablejsapi=1"
 
-    return templates.TemplateResponse("watch.html", {
+    return templates.TemplateResponse(request, "watch.html", {
         **base,
         "video": video,
         "embed_url": embed_url,

@@ -16,6 +16,7 @@ from web.routers.profile import router as profile_router
 from web.routers.ytproxy import router as ytproxy_router
 from web.routers.catalog import router as catalog_router
 from web.routers.pages import router as pages_router
+from web.routers.pwa import router as pwa_router
 from web.routers.search import router as search_router
 from web.routers.watch import router as watch_router
 
@@ -32,6 +33,7 @@ app.include_router(profile_router)
 app.include_router(ytproxy_router)
 app.include_router(catalog_router)
 app.include_router(pages_router)
+app.include_router(pwa_router)
 app.include_router(search_router)
 app.include_router(watch_router)
 

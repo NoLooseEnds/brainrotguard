@@ -40,9 +40,8 @@ async def login_page(request: Request, profile: str = Query("", max_length=50)):
             request.session["csrf_token"] = secrets.token_hex(32)
             return RedirectResponse(url="/", status_code=303)
         if p:
-            return templates.TemplateResponse("login.html", {
+            return templates.TemplateResponse(request, "login.html", {
                 **base_ctx(request),
-                "request": request,
                 "csrf_token": csrf_token,
                 "error": False,
                 "profiles": profiles,
@@ -52,9 +51,8 @@ async def login_page(request: Request, profile: str = Query("", max_length=50)):
 
     # Single profile with PIN -- go straight to PIN entry
     if len(profiles) == 1:
-        return templates.TemplateResponse("login.html", {
+        return templates.TemplateResponse(request, "login.html", {
             **base_ctx(request),
-            "request": request,
             "csrf_token": csrf_token,
             "error": False,
             "profiles": profiles,
@@ -63,9 +61,8 @@ async def login_page(request: Request, profile: str = Query("", max_length=50)):
         })
 
     # Show profile picker
-    return templates.TemplateResponse("login.html", {
+    return templates.TemplateResponse(request, "login.html", {
         **base_ctx(request),
-        "request": request,
         "csrf_token": csrf_token,
         "error": False,
         "profiles": profiles,
@@ -118,9 +115,8 @@ async def login_submit(
     profiles = vs.get_profiles()
     new_csrf = secrets.token_hex(32)
     request.session["csrf_token"] = new_csrf
-    return templates.TemplateResponse("login.html", {
+    return templates.TemplateResponse(request, "login.html", {
         **base_ctx(request),
-        "request": request,
         "csrf_token": new_csrf,
         "error": True,
         "profiles": profiles,

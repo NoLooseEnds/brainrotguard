@@ -19,6 +19,10 @@
     --border-faint: rgba(255, 255, 255, 0.04);
     --radius-card: 14px;
     --radius-btn: 10px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
 }
 
 body {
@@ -29,8 +33,10 @@ body {
     background-repeat: repeat;
     color: var(--text-primary);
     min-height: 100vh;
+    min-height: 100svh;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
+    overscroll-behavior-y: contain;
 }
 
 a {
@@ -48,7 +54,10 @@ header {
     align-items: center;
     gap: 1rem;
     background: linear-gradient(135deg, rgba(26, 26, 62, 0.72) 0%, rgba(15, 15, 35, 0.6) 100%);
-    padding: 0.625rem max(1.5rem, calc((100% - 75rem) / 2 + 1.5rem));
+    padding-top: calc(0.625rem + var(--safe-top));
+    padding-right: max(calc(1.5rem + var(--safe-right)), calc((100% - 75rem) / 2 + 1.5rem));
+    padding-bottom: 0.625rem;
+    padding-left: max(calc(1.5rem + var(--safe-left)), calc((100% - 75rem) / 2 + 1.5rem));
     border-bottom: 1px solid var(--border-subtle);
     position: sticky;
     top: 0;
@@ -73,7 +82,7 @@ header {
 /* === Footer === */
 footer {
     text-align: center;
-    padding: 1.5rem 0;
+    padding: 1.5rem max(20px, calc(20px + var(--safe-right))) calc(1.5rem + var(--safe-bottom)) max(20px, calc(20px + var(--safe-left)));
 }
 
 footer a {
@@ -158,7 +167,7 @@ footer a:hover {
 main {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 24px 20px;
+    padding: 24px max(20px, calc(20px + var(--safe-right))) calc(24px + var(--safe-bottom)) max(20px, calc(20px + var(--safe-left)));
     overflow-x: hidden;
 }
 
@@ -482,6 +491,38 @@ main {
 }
 .video-wrapper:fullscreen .fs-toggle,
 .video-wrapper:-webkit-full-screen .fs-toggle {
+    opacity: 1;
+    bottom: 16px;
+    right: 16px;
+    width: 44px;
+    height: 44px;
+}
+
+.video-fallback-fullscreen,
+.video-fallback-fullscreen body {
+    overflow: hidden;
+}
+
+.video-wrapper.video-wrapper-fallback-fullscreen {
+    position: fixed;
+    inset: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+    width: auto;
+    height: auto;
+    padding-bottom: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: #000;
+    z-index: 450;
+}
+
+.video-wrapper.video-wrapper-fallback-fullscreen iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.video-wrapper.video-wrapper-fallback-fullscreen .fs-toggle {
     opacity: 1;
     bottom: 16px;
     right: 16px;
@@ -865,13 +906,10 @@ main {
 
 .time-budget-primary {
     font-weight: 600;
-    color: #f5f7ff;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
-.time-budget .time-low,
 .time-budget-low .time-budget-primary {
-    color: #f5f7ff;
+    color: var(--accent);
 }
 
 /* === Time Remaining (Watch Page) === */
@@ -895,7 +933,7 @@ main {
     background: rgba(240, 160, 48, 0.95);
     color: var(--bg-card);
     text-align: center;
-    padding: 12px;
+    padding: 12px 12px calc(12px + var(--safe-bottom));
     font-size: 16px;
     font-weight: 600;
     z-index: 200;
@@ -909,7 +947,7 @@ main {
     background: rgba(233, 69, 96, 0.95);
     color: white;
     text-align: center;
-    padding: 12px;
+    padding: 12px 12px calc(12px + var(--safe-bottom));
     font-size: 16px;
     font-weight: 600;
     z-index: 200;
@@ -932,6 +970,7 @@ main {
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
     z-index: 300;
 }
 
@@ -1149,7 +1188,10 @@ main {
     }
     header {
         flex-wrap: wrap;
-        padding: 0.5rem 1.25rem;
+        padding-top: calc(0.5rem + var(--safe-top));
+        padding-right: max(1.25rem, calc(1.25rem + var(--safe-right)));
+        padding-bottom: 0.5rem;
+        padding-left: max(1.25rem, calc(1.25rem + var(--safe-left)));
         gap: 0.5rem;
     }
     .logo {
@@ -1923,7 +1965,7 @@ main {
 @media (max-width: 768px) {
     .watch-container-short .video-player .video-wrapper {
         padding-bottom: 0;
-        height: calc(100vh - 180px);
+        height: calc(100svh - 180px - var(--safe-top) - var(--safe-bottom));
     }
     .watch-container-short .video-player .video-wrapper iframe {
         position: relative;

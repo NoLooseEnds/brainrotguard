@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 # API paths safe to access without PIN auth
 _API_AUTH_EXEMPT = ("/api/status/", "/api/yt-iframe-api.js", "/api/yt-widget-api.js")
+_ROOT_AUTH_EXEMPT = ("/manifest.webmanifest", "/service-worker.js")
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -23,6 +24,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
+            "manifest-src 'self'; "
             "script-src 'self' 'unsafe-inline'; "
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' https://ko-fi.com https://i.ytimg.com https://i1.ytimg.com https://i2.ytimg.com "
@@ -30,6 +32,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "frame-src https://www.youtube-nocookie.com; "
             "connect-src 'self'; "
             "media-src https://*.googlevideo.com; "
+            "worker-src 'self'; "
             "object-src 'none'; "
             "base-uri 'self'"
         )
@@ -46,6 +49,8 @@ class PinAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         # Allow unauthenticated access to login, static assets, and specific read-only APIs
         if request.url.path.startswith(("/login", "/static")):
+            return await call_next(request)
+        if request.url.path in _ROOT_AUTH_EXEMPT:
             return await call_next(request)
         if request.url.path.startswith(_API_AUTH_EXEMPT):
             return await call_next(request)

@@ -57,7 +57,7 @@ async def index(request: Request, error: str = Query("", max_length=50)):
         channel_pills[cache_key] = display
     locale = getattr(request.app.state, "locale", "en")
     error_message = t(locale, _ERROR_MESSAGES.get(error, "")) if error else ""
-    return templates.TemplateResponse("index.html", {
+    return templates.TemplateResponse(request, "index.html", {
         **base_ctx(request),
         "catalog": catalog,
         "has_more": len(full_catalog) > page_size,
@@ -91,7 +91,7 @@ async def activity_page(request: Request):
     cat_info = get_category_time_info(store=cs, wl_cfg=wl_cfg)
     total_min = sum(v["minutes"] for v in breakdown)
     annotate_categories(breakdown, cs)
-    return templates.TemplateResponse("activity.html", {
+    return templates.TemplateResponse(request, "activity.html", {
         **base_ctx(request),
         "breakdown": breakdown,
         "total_min": round(total_min, 1),
