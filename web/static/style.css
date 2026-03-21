@@ -2406,7 +2406,6 @@ main {
     height: 14px;
     flex-shrink: 0;
 }
-
 .avatar-menu-link:hover,
 .avatar-switch-link:hover {
     color: var(--accent);

@@ -212,8 +212,6 @@ async def requests_page(request: Request):
         "pending_videos": pending_videos,
         "approved_videos": approved_videos,
     })
-
-
 @router.get("/history", response_class=HTMLResponse)
 async def history_page(request: Request):
     """Archive of watched videos grouped by last watched date."""

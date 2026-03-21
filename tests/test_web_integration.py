@@ -674,6 +674,92 @@ class TestNoPinMode:
 
 
 class TestCatalogAndHistory:
+    def test_history_page_lists_watched_videos(self, auth_client, store):
+        cs = ChildStore(store, "default")
+        cs.add_video("histpage123", "Watched Once", "Test Channel", duration=120)
+        cs.update_status("histpage123", "approved")
+        cs.record_view("histpage123")
+        cs.record_watch_seconds("histpage123", 60)
+
+        resp = auth_client.get("/history")
+
+        assert resp.status_code == 200
+        assert "Watched Once" in resp.text
+        assert "History" in resp.text
+        assert "/api/history" in resp.text
+
+    def test_history_page_uses_total_time_and_progress_bar(self, auth_client, store):
+        cs = ChildStore(store, "default")
+        cs.add_video("histprog123", "Watched Half", "Test Channel", duration=120)
+        cs.update_status("histprog123", "approved")
+        cs.record_view("histprog123")
+        cs.record_watch_seconds("histprog123", 60)
+
+        resp = auth_client.get("/history")
+
+        assert resp.status_code == 200
+        assert "2 min" in resp.text
+        assert "1 / 2 min" not in resp.text
+        assert "watch-progress-fill" in resp.text
+
+    def test_history_api_paginates(self, auth_client, store):
+        cs = ChildStore(store, "default")
+        for idx in range(35):
+            video_id = f"h{idx:010d}"
+            cs.add_video(video_id, f"History {idx}", "Test Channel", duration=120)
+            cs.update_status(video_id, "approved")
+            cs.record_view(video_id)
+            store.conn.execute(
+                "UPDATE videos SET last_viewed_at = ? WHERE video_id = ? AND profile_id = 'default'",
+                (f"2026-03-{(idx % 9) + 10:02d} 12:{idx % 60:02d}:00", video_id),
+            )
+        store.conn.commit()
+
+        resp = auth_client.get("/api/history?offset=0&limit=30")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["count"] == 30
+        assert data["has_more"] is True
+        assert data["total"] == 35
+        assert data["groups"]
+
+    def test_history_api_includes_watched_percent(self, auth_client, store):
+        cs = ChildStore(store, "default")
+        cs.add_video("histpct1234", "History Progress", "Test Channel", duration=120)
+        cs.update_status("histpct1234", "approved")
+        cs.record_view("histpct1234")
+        cs.record_watch_seconds("histpct1234", 60)
+
+        resp = auth_client.get("/api/history?offset=0&limit=30")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["groups"]
+        assert data["groups"][0]["videos"][0]["watched_percent"] == 50
+
+    def test_history_progress_prefers_saved_playback_position(self, auth_client, store):
+        cs = ChildStore(store, "default")
+        cs.add_video("histseek123", "Seeked Video", "Test Channel", duration=120)
+        cs.update_status("histseek123", "approved")
+
+        watch_resp = auth_client.get("/watch/histseek123")
+        assert watch_resp.status_code == 200
+
+        heartbeat_resp = auth_client.post("/api/watch-heartbeat", json={
+            "video_id": "histseek123",
+            "seconds": 5,
+            "position_seconds": 90,
+        })
+        assert heartbeat_resp.status_code == 200
+
+        resp = auth_client.get("/api/history?offset=0&limit=30")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["groups"]
+        assert data["groups"][0]["videos"][0]["watched_percent"] == 75
+
     def test_active_catalog_returns_only_unfinished_videos(self, auth_client, store):
         cs = ChildStore(store, "default")
         cs.add_video("act12345a1b", "Ready To Start", "Test Channel", duration=180)
