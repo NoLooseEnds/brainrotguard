@@ -27,6 +27,7 @@ from web.shared import templates, limiter, static_dir, register_filters, _rate_l
 from web.cache import init_app_state, get_profile_cache
 from web.middleware import PinAuthMiddleware
 from web.routers.auth import router as auth_router
+from web.routers.profile import router as profile_router
 from web.routers.pages import router as pages_router
 from web.routers.pwa import router as pwa_router
 from web.routers.search import router as search_router
@@ -82,6 +83,55 @@ def _mock_extractor():
         "duration": 212,
         "is_short": False,
     }
+    mock.extract_playback.return_value = {
+        "video_id": "dQw4w9WgXcQ",
+        "mode": "hls",
+        "title": "Test Video",
+        "duration": 212,
+        "audio_priority": "no, sv, en",
+        "master_manifest_url": "https://manifest.googlevideo.com/api/manifest/hls_variant/master.m3u8",
+        "selected_stream_id": "233-hls-0:no",
+        "selected_language": "no",
+        "audio_tracks": [
+            {
+                "stream_id": "233-hls-0:no",
+                "format_id": "233-hls-0",
+                "language": "no",
+                "label": "Norwegian",
+                "ext": "mp4",
+                "acodec": "mp4a.40.2",
+                "vcodec": "none",
+                "url": "https://manifest.googlevideo.com/api/manifest/hls_audio_no.m3u8",
+            },
+            {
+                "stream_id": "233-hls-1:en",
+                "format_id": "233-hls-1",
+                "language": "en",
+                "label": "English",
+                "ext": "mp4",
+                "acodec": "mp4a.40.2",
+                "vcodec": "none",
+                "url": "https://manifest.googlevideo.com/api/manifest/hls_audio_en.m3u8",
+            },
+        ],
+        "video_variants": [
+            {
+                "format_id": "231-hls",
+                "label": "720p",
+                "width": 1280,
+                "height": 720,
+                "ext": "mp4",
+                "vcodec": "avc1.64001F",
+                "acodec": "none",
+                "tbr": 2500,
+                "url": "https://manifest.googlevideo.com/api/manifest/hls_720.m3u8",
+            },
+        ],
+        "language_options": [
+            {"code": "no", "label": "Norwegian", "stream_id": "233-hls-0:no", "selected": True},
+            {"code": "en", "label": "English", "stream_id": "233-hls-1:en", "selected": False},
+        ],
+    }
     mock.search.return_value = [
         {
             "video_id": "abc12345678",
@@ -106,6 +156,7 @@ def _create_test_app(store: VideoStore, pin: str = "1234") -> FastAPI:
 
     # Routers
     test_app.include_router(auth_router)
+    test_app.include_router(profile_router)
     test_app.include_router(pages_router)
     test_app.include_router(pwa_router)
     test_app.include_router(search_router)
@@ -212,13 +263,14 @@ class TestPageLoads:
         assert resp.status_code == 200
         assert "application/javascript" in resp.headers.get("content-type", "")
         assert resp.headers.get("service-worker-allowed", "") == "/"
-        assert "brainrotguard-static-v1" in resp.text
+        assert "brainrotguard-static-v2" in resp.text
 
     def test_home_includes_pwa_metadata(self, auth_client):
         resp = auth_client.get("/")
         assert resp.status_code == 200
         assert 'rel="manifest" href="/manifest.webmanifest"' in resp.text
         assert 'navigator.serviceWorker.register("/service-worker.js")' in resp.text
+        assert "pwa-refresh-indicator" in resp.text
 
     def test_home_includes_requests_link(self, auth_client):
         resp = auth_client.get("/")
@@ -630,6 +682,8 @@ class TestWatchPage:
         resp = auth_client.get("/watch/watchTest12")
         assert resp.status_code == 200
         assert "watchTest12" in resp.text
+        assert "/api/watch-hls/watchTest12/master.m3u8" in resp.text
+        assert 'id="audio-language-select"' in resp.text
         assert "brg-watch-position:" in resp.text
         assert "localStorage.setItem(playbackStorageKey" in resp.text
         assert "pagehide" in resp.text
@@ -642,8 +696,45 @@ class TestWatchPage:
         assert "backgroundPauseInProgress" in resp.text
         assert "document.visibilityState === 'visible'" in resp.text
         assert "attemptAutoplayIfActive" in resp.text
+        assert "initLocalPlayer" in resp.text
+        assert "/static/hls.min.js" in resp.text
+        assert "window.Hls && window.Hls.isSupported()" in resp.text
         assert "brg-nav-history" in resp.text
         assert "previous.indexOf('/pending/')" in resp.text
+
+    def test_hls_master_playlist_is_local_and_marks_selected_audio(self, auth_client, store, monkeypatch):
+        cs = ChildStore(store, "default")
+        cs.add_video(
+            video_id="watchTest12",
+            title="Watch Me",
+            channel_name="Test Channel",
+            thumbnail_url="https://i.ytimg.com/vi/watchTest12/hqdefault.jpg",
+            duration=120,
+        )
+        cs.update_status("watchTest12", "approved")
+
+        watch_resp = auth_client.get("/watch/watchTest12")
+        assert watch_resp.status_code == 200
+
+        from web.routers import watch as watch_router_module
+
+        async def _fake_fetch(_request, url: str):
+            return 200, {"content-type": "application/vnd.apple.mpegurl"}, (
+                "#EXTM3U\n"
+                "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"Norwegian\",LANGUAGE=\"no\",DEFAULT=NO,AUTOSELECT=YES,URI=\"https://manifest.googlevideo.com/api/manifest/hls_playlist/audio_no.m3u8\"\n"
+                "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"English\",LANGUAGE=\"en\",DEFAULT=YES,AUTOSELECT=YES,URI=\"https://manifest.googlevideo.com/api/manifest/hls_playlist/audio_en.m3u8\"\n"
+                "#EXT-X-STREAM-INF:BANDWIDTH=250000,AUDIO=\"audio\"\n"
+                "https://manifest.googlevideo.com/api/manifest/hls_playlist/video_240.m3u8\n"
+            )
+
+        monkeypatch.setattr(watch_router_module, "_fetch_upstream_playlist", _fake_fetch)
+        resp = auth_client.get("/api/watch-hls/watchTest12/master.m3u8")
+
+        assert resp.status_code == 200
+        assert "#EXTM3U" in resp.text
+        assert 'LANGUAGE="no",DEFAULT=YES' in resp.text
+        assert 'LANGUAGE="en",DEFAULT=NO' in resp.text
+        assert "/api/watch-hls/watchTest12/resource/" in resp.text
 
     def test_watch_pending_redirects(self, auth_client, store):
         cs = ChildStore(store, "default")
@@ -681,6 +772,15 @@ class TestWatchPage:
 
         video = cs.get_video("watchPos123")
         assert video["resume_seconds"] == 90
+
+
+class TestProfileSettingsAPI:
+    def test_updates_audio_language_priority(self, auth_client, store):
+        resp = auth_client.post("/api/audio-preferences", json={"priority": "nb, sv, en"})
+
+        assert resp.status_code == 200
+        assert resp.json()["priority"] == "no, sv, en"
+        assert store.get_setting("default:audio_language_priority") == "no, sv, en"
 
 
 # ---------------------------------------------------------------------------

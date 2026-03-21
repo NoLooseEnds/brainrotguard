@@ -27,12 +27,7 @@ async def api_catalog(
     state = request.app.state
     profile_id = request.session.get("child_id", "default")
     if active or requests:
-        full = build_active_row(state, limit=200, profile_id=profile_id)
-        if channel:
-            full = [
-                v for v in full
-                if v.get("channel_id") == channel or v.get("channel_name") == channel
-            ]
+        full = build_active_row(state, limit=200, profile_id=profile_id, channel_filter=channel, category_filter=category)
         if dismissed:
             dismissed_ids = {item for item in dismissed.split(",") if item and VIDEO_ID_RE.match(item)}
             if dismissed_ids:
@@ -41,7 +36,7 @@ async def api_catalog(
         full = build_shorts_catalog(state, profile_id=profile_id)
     else:
         full = build_catalog(state, channel_filter=channel, profile_id=profile_id)
-    if category:
+    if category and not (active or requests):
         full = [v for v in full if v.get("category", "fun") == category]
     page = full[offset:offset + limit]
     return JSONResponse({

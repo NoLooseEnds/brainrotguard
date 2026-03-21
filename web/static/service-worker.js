@@ -10,6 +10,7 @@ const STATIC_ASSETS = [
   "/static/brg-logo.png",
   "/static/bg-doodle.png",
   "/static/thumb-preview.js",
+  "/static/hls.min.js",
 ];
 
 self.addEventListener("install", (event) => {

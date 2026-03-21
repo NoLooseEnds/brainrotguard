@@ -10,12 +10,32 @@ from telegram.ext import ContextTypes
 
 from bot.helpers import _md, _answer_bg, _nav_row, _edit_msg, _channel_md_link, MD2
 from youtube.extractor import format_duration
+from web.helpers import (
+    format_audio_language_priority,
+    format_player_mode,
+    format_quality_preference,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class CommandsMixin:
     """General command methods extracted from BrainRotGuardBot."""
+
+    def _player_mode_label(self, value: str) -> str:
+        labels = {
+            "auto": self.tr("Auto"),
+            "local": self.tr("Local Player"),
+            "embed": self.tr("YouTube Embed"),
+        }
+        return labels.get(value, value)
+
+    def _quality_preference_label(self, value: str) -> str:
+        labels = {
+            "auto": self.tr("Auto"),
+            "best": self.tr("Best Available"),
+        }
+        return labels.get(value, value)
 
     async def _cmd_child(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Manage child profiles. /child [add|remove|rename|pin]."""
@@ -219,6 +239,10 @@ class CommandsMixin:
                 "`/time <day> copy <days|weekdays|weekend|all>`\n"
                 "`/shorts [on|off]` - Toggle Shorts row\n"
                 "`/autoload [on|off]` - Toggle scroll loading\n\n"
+                "**Playback:**\n"
+                "`/audio [no, sv, en]` - Audio language priority\n"
+                "`/player [auto|local|embed]` - Player mode\n"
+                "`/quality [auto|360|720|1080|1440|2160|best]` - Preferred quality\n\n"
                 "**Profiles:**\n"
                 "`/child` - List child profiles\n"
                 "`/child add <name> [pin]`\n"
@@ -349,6 +373,98 @@ class CommandsMixin:
                             "`/autoload on` — enable scroll loading"
                         )
                     ), parse_mode=MD2)
+        await self._with_child_context(update, context, _inner)
+
+    async def _cmd_audio(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show or update preferred audio language order."""
+        if not await self._require_admin(update):
+            return
+
+        async def _inner(update, context, cs, profile):
+            ctx = self._ctx_label(profile)
+            args = context.args or []
+            if not args:
+                current = format_audio_language_priority(cs.get_setting("audio_language_priority", ""))
+                await update.effective_message.reply_text(_md(
+                    f"**{self.tr('Playback{ctx}', ctx=ctx)}**\n\n"
+                    f"{self.tr('Audio priority: {priority}', priority=current)}\n\n"
+                    f"`{self.tr('Usage: /audio <lang1, lang2, ...>')}`"
+                ), parse_mode=MD2)
+                return
+
+            priority = format_audio_language_priority(" ".join(args))
+            cs.set_setting("audio_language_priority", priority)
+            await update.effective_message.reply_text(_md(
+                self.tr("Updated audio priority{ctx}: {priority}", ctx=ctx, priority=priority)
+            ), parse_mode=MD2)
+
+        await self._with_child_context(update, context, _inner)
+
+    async def _cmd_player(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show or update preferred player mode."""
+        if not await self._require_admin(update):
+            return
+
+        async def _inner(update, context, cs, profile):
+            ctx = self._ctx_label(profile)
+            args = context.args or []
+            if not args:
+                current = format_player_mode(cs.get_setting("player_mode", ""))
+                await update.effective_message.reply_text(_md(
+                    f"**{self.tr('Playback{ctx}', ctx=ctx)}**\n\n"
+                    f"{self.tr('Player mode: {mode}', mode=self._player_mode_label(current))}\n\n"
+                    f"`{self.tr('Usage: /player <auto|local|embed>')}`"
+                ), parse_mode=MD2)
+                return
+
+            raw_value = args[0].strip().lower()
+            value = format_player_mode(raw_value)
+            if raw_value != value:
+                await update.effective_message.reply_text(
+                    self.tr("Invalid player mode: {value}", value=raw_value)
+                )
+                return
+
+            cs.set_setting("player_mode", value)
+            await update.effective_message.reply_text(_md(
+                self.tr("Updated player mode{ctx}: {mode}", ctx=ctx, mode=self._player_mode_label(value))
+            ), parse_mode=MD2)
+
+        await self._with_child_context(update, context, _inner)
+
+    async def _cmd_quality(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show or update preferred playback quality."""
+        if not await self._require_admin(update):
+            return
+
+        async def _inner(update, context, cs, profile):
+            ctx = self._ctx_label(profile)
+            args = context.args or []
+            if not args:
+                current = format_quality_preference(cs.get_setting("quality_preference", ""))
+                await update.effective_message.reply_text(_md(
+                    f"**{self.tr('Playback{ctx}', ctx=ctx)}**\n\n"
+                    f"{self.tr('Preferred quality: {quality}', quality=self._quality_preference_label(current))}\n\n"
+                    f"`{self.tr('Usage: /quality <auto|360|720|1080|1440|2160|best>')}`"
+                ), parse_mode=MD2)
+                return
+
+            raw_value = args[0].strip().lower()
+            value = format_quality_preference(raw_value)
+            if raw_value != value:
+                await update.effective_message.reply_text(
+                    self.tr("Invalid quality preference: {value}", value=raw_value)
+                )
+                return
+
+            cs.set_setting("quality_preference", value)
+            await update.effective_message.reply_text(_md(
+                self.tr(
+                    "Updated preferred quality{ctx}: {quality}",
+                    ctx=ctx,
+                    quality=self._quality_preference_label(value),
+                )
+            ), parse_mode=MD2)
 
         await self._with_child_context(update, context, _inner)
 

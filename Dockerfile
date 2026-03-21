@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gosu && rm -rf /var/lib/apt/lists/* \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gosu ffmpeg && rm -rf /var/lib/apt/lists/* \
     && useradd -r -m -s /bin/false appuser && mkdir -p /app/db && chown -R appuser:appuser /app
 
 COPY entrypoint.sh /entrypoint.sh

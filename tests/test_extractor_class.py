@@ -31,6 +31,7 @@ class TestYouTubeExtractorHasAllMethods:
 
     @pytest.mark.parametrize("method", [
         "extract_metadata",
+        "extract_playback",
         "search",
         "fetch_channel_videos",
         "fetch_channel_shorts",

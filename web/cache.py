@@ -93,6 +93,11 @@ def init_app_state(state):
     # Heartbeat dedup
     state.last_heartbeat = {}
     state.heartbeat_last_cleanup = 0.0
+    # Playback info cache (keyed by video_id + audio priority)
+    state.playback_cache = {}
+    # HLS segment token cache (keyed by opaque token)
+    state.playback_segment_cache = {}
+    state.playback_segment_last_cleanup = 0.0
 
 
 # ---------------------------------------------------------------------------

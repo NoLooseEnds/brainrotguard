@@ -28,7 +28,63 @@
 <div class="watch-container{% if is_short %} watch-container-short{% endif %}">
     <div class="video-player">
         <div class="video-wrapper">
+            {% if playback %}
+            <video
+                id="ytplayer"
+                class="local-video-player"
+                playsinline
+                preload="metadata"
+                controls
+            ></video>
+            {% else %}
             <div id="ytplayer"></div>
+            {% endif %}
+            <button id="player-menu-toggle" class="player-menu-toggle" type="button" aria-label="{{ t('Playback Settings') }}">&#9881;</button>
+            <div id="player-menu" class="player-menu-panel">
+                {% if playback and playback.language_options|length > 1 %}
+                <label class="player-menu-field" data-local-control="1" for="audio-language-select">
+                    <span class="player-menu-label">{{ t("Audio") }}</span>
+                    <select id="audio-language-select" class="player-menu-select">
+                        {% for option in playback.language_options %}
+                        <option value="{{ option.stream_id }}" {% if option.selected %}selected{% endif %}>{{ option.code | upper }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                {% endif %}
+                {% if playback and playback.subtitle_options %}
+                <label class="player-menu-field" data-local-control="1" for="subtitle-language-select">
+                    <span class="player-menu-label">{{ t("Captions") }}</span>
+                    <select id="subtitle-language-select" class="player-menu-select">
+                        <option value="off">{{ t("Off") }}</option>
+                        {% for option in playback.subtitle_options %}
+                        <option value="{{ option.code }}">{{ option.label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                {% endif %}
+                {% if playback and playback.mode == "hls" %}
+                <label class="player-menu-field" data-local-control="1" for="quality-select">
+                    <span class="player-menu-label">{{ t("Quality") }}</span>
+                    <select id="quality-select" class="player-menu-select">
+                        <option value="auto" {% if quality_preference == "auto" %}selected{% endif %}>{{ t("Auto") }}</option>
+                        <option value="360" {% if quality_preference == "360" %}selected{% endif %}>360p</option>
+                        <option value="720" {% if quality_preference == "720" %}selected{% endif %}>720p</option>
+                        <option value="1080" {% if quality_preference == "1080" %}selected{% endif %}>1080p</option>
+                        <option value="1440" {% if quality_preference == "1440" %}selected{% endif %}>1440p</option>
+                        <option value="2160" {% if quality_preference == "2160" %}selected{% endif %}>4K</option>
+                        <option value="best" {% if quality_preference == "best" %}selected{% endif %}>{{ t("Best Available") }}</option>
+                    </select>
+                </label>
+                {% endif %}
+                <label class="player-menu-field" for="player-mode-select">
+                    <span class="player-menu-label">{{ t("Player Mode") }}</span>
+                    <select id="player-mode-select" class="player-menu-select">
+                        <option value="auto" {% if player_mode == "auto" %}selected{% endif %}>{{ t("Auto") }}</option>
+                        <option value="local" {% if player_mode == "local" %}selected{% endif %}>{{ t("Local Player") }}</option>
+                        <option value="embed" {% if player_mode == "embed" %}selected{% endif %}>{{ t("YouTube Embed") }}</option>
+                    </select>
+                </label>
+            </div>
             <button id="fs-toggle" class="fs-toggle" onclick="toggleFullscreen()" aria-label="{{ t('Fullscreen') }}"></button>
         </div>
     </div>
@@ -36,11 +92,6 @@
     <div class="watch-info">
         <h2 class="watch-title">{{ video.title }}</h2>
         <p class="watch-channel">{{ video.channel_name }}</p>
-        {% if time_info %}
-        <p class="time-remaining" id="time-remaining">
-            {{ t("{category} time left:", category=cat_label) }} <span id="time-counter">{{ time_info.remaining_min | int }} min</span>
-        </p>
-        {% endif %}
         <a href="/" class="back-link back-link-home back-link-previous">{{ t("Back") }}</a>
     </div>
 </div>
@@ -61,11 +112,75 @@
 </div>
 {% endif %}
 
+{% if playback and playback.mode == "hls" %}
+<script src="/static/hls.min.js"></script>
+{% endif %}
 <script>
-var tag = document.createElement('script');
-tag.src = "/api/yt-iframe-api.js";
-var firstScriptTag = document.getElementsByTagName('script')[0];
-firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+var usingLocalPlayback = {{ (playback is not none) | tojson }};
+var playbackMode = {{ (playback.mode if playback else '') | tojson }};
+var usingAdaptivePlayback = {{ ((playback is not none) and playback.mode == 'hls') | tojson }};
+var mediaProxyBase = {{ (('/api/watch-hls/' ~ video.video_id ~ '/master.m3u8') if playback and playback.mode == 'hls' else (('/api/watch-media/' ~ video.video_id) if playback else '')) | tojson }};
+var initialStreamId = {{ (playback.selected_stream_id if playback else '') | tojson }};
+var audioLanguageOptions = {{ (playback.language_options if playback else []) | tojson }};
+var subtitleOptions = {{ (playback.subtitle_options if playback else []) | tojson }};
+var playerMode = {{ player_mode | tojson }};
+var qualityPreference = {{ quality_preference | tojson }};
+var usingEmbedFallback = !usingLocalPlayback;
+
+function ensureIframeApiLoaded() {
+    if (window.YT && typeof window.YT.Player === 'function') return;
+    if (document.querySelector('script[data-brg-iframe-api="1"]')) return;
+    var tag = document.createElement('script');
+    tag.src = "/api/yt-iframe-api.js";
+    tag.dataset.brgIframeApi = '1';
+    var firstScriptTag = document.getElementsByTagName('script')[0];
+    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+}
+
+function mountEmbedPlayer() {
+    var current = document.getElementById('ytplayer');
+    if (!current || current.tagName === 'IFRAME') return;
+    var iframe = document.createElement('iframe');
+    iframe.id = 'ytplayer';
+    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation allow-forms allow-storage-access-by-user-activation');
+    iframe.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture');
+    iframe.setAttribute('allowfullscreen', '');
+    iframe.src = 'https://www.youtube-nocookie.com/embed/' + videoId
+        + '?enablejsapi=1&autoplay=0&rel=0&modestbranding=1'
+        + '&origin=' + encodeURIComponent(playerOrigin);
+    current.parentNode.replaceChild(iframe, current);
+}
+
+function syncLocalPlaybackControls() {
+    document.querySelectorAll('[data-local-control="1"]').forEach(function(node) {
+        node.hidden = !usingLocalPlayback;
+    });
+}
+
+function fallbackToEmbedPlayer() {
+    if (usingEmbedFallback) return;
+    usingEmbedFallback = true;
+    usingLocalPlayback = false;
+    usingAdaptivePlayback = false;
+    syncLocalPlaybackControls();
+    stopLocalPlaybackRuntime();
+    hidePauseOverlay();
+    var endOverlay = document.getElementById('end-overlay');
+    if (endOverlay) endOverlay.style.display = 'none';
+    mountEmbedPlayer();
+    syncPlayerChrome();
+    ensureIframeApiLoaded();
+    if (window.YT && typeof window.YT.Player === 'function') {
+        window.setTimeout(onYouTubeIframeAPIReady, 0);
+    }
+}
+
+if (!usingLocalPlayback) {
+    ensureIframeApiLoaded();
+} else {
+    window.YT = window.YT || { PlayerState: { ENDED: 0, PLAYING: 1, PAUSED: 2 } };
+}
+syncLocalPlaybackControls();
 
 var player;
 var isPlaying = false;
@@ -74,7 +189,7 @@ var heartbeatInterval = null;
 // NOTE: remainingSeconds is client-side and can be manipulated via DevTools.
 // The server heartbeat response is the authority and corrects this value every 15s.
 var remainingSeconds = {{ time_info.remaining_sec if time_info else -1 }};
-var hasTimeLimit = {{ 'true' if time_info else 'false' }};
+var hasTimeLimit = {{ (time_info is not none) | tojson }};
 var videoId = {{ video.video_id | tojson }};
 var countdownInterval = null;
 var videoFinishedText = {{ t("Video finished") | tojson }};
@@ -83,6 +198,7 @@ var remainingTodayText = {{ t("{remaining} min remaining today", remaining="__RE
 var noTimeRemainingText = {{ t("No time remaining today") | tojson }};
 var limitMinutes = {{ time_info.limit_min if time_info else 0 }};
 var fallbackFullscreenActive = false;
+var playerOrigin = {{ player_origin | tojson }};
 var profileId = {{ profile_id | tojson }};
 var playbackStorageKey = 'brg-watch-position:' + profileId + ':' + videoId;
 var positionSaveInterval = null;
@@ -92,6 +208,268 @@ var exitFlushSent = false;
 var backgroundPauseInProgress = false;
 var lastPlaybackTickAt = 0;
 var exitFlushSent = false;
+var hlsInstance = null;
+var adaptiveAudioStreamId = initialStreamId;
+var selectedSubtitleCode = 'off';
+var subtitleTrackNodes = {};
+var adaptiveNetworkRecoveryAttempts = 0;
+
+function buildMediaUrl(streamId) {
+    if (usingAdaptivePlayback) {
+        return mediaProxyBase + '?audio=' + encodeURIComponent(streamId || initialStreamId);
+    }
+    return mediaProxyBase + '?stream=' + encodeURIComponent(streamId || initialStreamId);
+}
+
+function getAudioOptionForStream(streamId) {
+    for (var i = 0; i < audioLanguageOptions.length; i++) {
+        if (audioLanguageOptions[i].stream_id === streamId) {
+            return audioLanguageOptions[i];
+        }
+    }
+    return null;
+}
+
+function getPreferredAudioLanguage(streamId) {
+    var option = getAudioOptionForStream(streamId) || getAudioOptionForStream(initialStreamId);
+    return option ? String(option.code || '').toLowerCase() : '';
+}
+
+function normalizeLanguageCode(value) {
+    var normalized = String(value || '').trim().toLowerCase().replace(/_/g, '-');
+    if (!normalized) return '';
+    if (normalized === 'nb' || normalized === 'nn' || normalized === 'nob' || normalized === 'nno') return 'no';
+    return normalized.split('-', 1)[0];
+}
+
+function normalizeQualityPreference(value) {
+    var normalized = String(value || 'auto').toLowerCase();
+    return ['auto', '360', '720', '1080', '1440', '2160', 'best'].indexOf(normalized) >= 0 ? normalized : 'auto';
+}
+
+function parsePriorityList(raw) {
+    return String(raw || '')
+        .split(',')
+        .map(function(part) { return part.trim().toLowerCase(); })
+        .filter(function(part, index, arr) { return part && arr.indexOf(part) === index; });
+}
+
+function chooseDefaultAudioStream(priorityRaw) {
+    var priorities = parsePriorityList(priorityRaw);
+    for (var i = 0; i < priorities.length; i++) {
+        for (var j = 0; j < audioLanguageOptions.length; j++) {
+            if (String(audioLanguageOptions[j].code || '').toLowerCase() === priorities[i]) {
+                return audioLanguageOptions[j].stream_id;
+            }
+        }
+    }
+    for (var k = 0; k < audioLanguageOptions.length; k++) {
+        if (String(audioLanguageOptions[k].code || '').toLowerCase() === 'en') {
+            return audioLanguageOptions[k].stream_id;
+        }
+    }
+    return audioLanguageOptions.length ? audioLanguageOptions[0].stream_id : initialStreamId;
+}
+
+function sortAudioLanguageOptions(priorityRaw) {
+    var selector = document.getElementById('audio-language-select');
+    if (!selector || !selector.options || selector.options.length < 2) return;
+    var priorityList = parsePriorityList(priorityRaw);
+    if (priorityList.indexOf('en') === -1) priorityList.push('en');
+    var selectedValue = selector.value;
+    var items = Array.prototype.slice.call(selector.options).map(function(option) {
+        var streamId = option.value;
+        var meta = getAudioOptionForStream(streamId) || {};
+        var code = String(meta.code || '').toLowerCase();
+        var index = priorityList.indexOf(code);
+        return {
+            node: option,
+            code: code,
+            rank: index >= 0 ? index : priorityList.length,
+            label: String(option.textContent || '').toLowerCase()
+        };
+    });
+    items.sort(function(a, b) {
+        if (a.rank !== b.rank) return a.rank - b.rank;
+        if (a.code !== b.code) return a.code < b.code ? -1 : 1;
+        return a.label < b.label ? -1 : (a.label > b.label ? 1 : 0);
+    });
+    items.forEach(function(item) {
+        selector.appendChild(item.node);
+    });
+    selector.value = selectedValue;
+}
+
+function stopLocalPlaybackRuntime() {
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+    }
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    if (endCheckInterval) {
+        clearInterval(endCheckInterval);
+        endCheckInterval = null;
+    }
+    stopPositionSaving();
+    isPlaying = false;
+    autoplayPending = false;
+}
+
+function selectAdaptiveAudioTrack(preferredStreamId) {
+    if (!hlsInstance || !hlsInstance.audioTracks || !hlsInstance.audioTracks.length) return false;
+    var option = getAudioOptionForStream(preferredStreamId) || getAudioOptionForStream(initialStreamId);
+    var preferredLanguage = normalizeLanguageCode(getPreferredAudioLanguage(preferredStreamId));
+    if (!preferredLanguage) return false;
+    for (var i = 0; i < hlsInstance.audioTracks.length; i++) {
+        var track = hlsInstance.audioTracks[i] || {};
+        var lang = normalizeLanguageCode(track.lang || '');
+        var name = normalizeLanguageCode(track.name || '');
+        if (lang === preferredLanguage || name === preferredLanguage) {
+            if (hlsInstance.audioTrack !== i) {
+                hlsInstance.audioTrack = i;
+            }
+            adaptiveAudioStreamId = option ? option.stream_id : preferredStreamId;
+            return true;
+        }
+    }
+    return false;
+}
+
+function selectNativeAudioTrack(videoEl, preferredStreamId) {
+    var preferredLanguage = normalizeLanguageCode(getPreferredAudioLanguage(preferredStreamId));
+    var tracks = videoEl && videoEl.audioTracks;
+    if (!preferredLanguage || !tracks || !tracks.length) return false;
+    var matchedIndex = -1;
+    for (var i = 0; i < tracks.length; i++) {
+        var track = tracks[i];
+        if (!track) continue;
+        var lang = normalizeLanguageCode(track.language || track.lang || '');
+        var name = normalizeLanguageCode(track.label || track.id || '');
+        if (lang === preferredLanguage || name === preferredLanguage) {
+            matchedIndex = i;
+            break;
+        }
+    }
+    if (matchedIndex < 0) return false;
+    for (var j = 0; j < tracks.length; j++) {
+        var candidate = tracks[j];
+        if (!candidate) continue;
+        try {
+            candidate.enabled = j === matchedIndex;
+        } catch (e) {}
+    }
+    return true;
+}
+
+function chooseQualityLevelIndex(pref) {
+    if (!hlsInstance || !hlsInstance.levels || !hlsInstance.levels.length) return -1;
+    if (pref === 'best') return hlsInstance.levels.length - 1;
+    var target = parseInt(pref, 10);
+    if (!Number.isFinite(target)) return -1;
+    var bestIndex = -1;
+    for (var i = 0; i < hlsInstance.levels.length; i++) {
+        var level = hlsInstance.levels[i] || {};
+        var height = parseInt(level.height || 0, 10);
+        if (!height) continue;
+        if (height <= target) bestIndex = i;
+    }
+    if (bestIndex >= 0) return bestIndex;
+    for (var j = 0; j < hlsInstance.levels.length; j++) {
+        if (parseInt((hlsInstance.levels[j] || {}).height || 0, 10) > 0) return j;
+    }
+    return hlsInstance.levels.length - 1;
+}
+
+function applyQualityPreference(pref) {
+    qualityPreference = normalizeQualityPreference(pref);
+    var selector = document.getElementById('quality-select');
+    if (selector) selector.value = qualityPreference;
+    if (!hlsInstance || !hlsInstance.levels || !hlsInstance.levels.length) return false;
+    if (qualityPreference === 'auto') {
+        hlsInstance.autoLevelCapping = -1;
+        return true;
+    }
+    var levelIndex = chooseQualityLevelIndex(qualityPreference);
+    if (levelIndex < 0) return false;
+    hlsInstance.autoLevelCapping = levelIndex;
+    hlsInstance.nextLevel = levelIndex;
+    return true;
+}
+
+function createSubtitleTracks(videoEl) {
+    if (!videoEl) return;
+    videoEl.querySelectorAll('track[data-brg-subtitle="1"]').forEach(function(node) {
+        node.remove();
+    });
+    subtitleTrackNodes = {};
+}
+
+function ensureSubtitleTrack(videoEl, code) {
+    if (!videoEl || !code || code === 'off') return null;
+    var normalizedCode = String(code || '').toLowerCase();
+    if (subtitleTrackNodes[normalizedCode]) return subtitleTrackNodes[normalizedCode];
+    var option = null;
+    for (var i = 0; i < subtitleOptions.length; i++) {
+        if (String((subtitleOptions[i] || {}).code || '').toLowerCase() === normalizedCode) {
+            option = subtitleOptions[i];
+            break;
+        }
+    }
+    if (!option || !option.proxy_url) return null;
+    var track = document.createElement('track');
+    track.kind = 'subtitles';
+    track.label = option.label || normalizedCode.toUpperCase();
+    track.srclang = normalizedCode;
+    track.src = option.proxy_url;
+    track.dataset.brgSubtitle = '1';
+    track.dataset.code = normalizedCode;
+    videoEl.appendChild(track);
+    subtitleTrackNodes[normalizedCode] = track;
+    return track;
+}
+
+function applySubtitleSelection(code) {
+    selectedSubtitleCode = String(code || 'off').toLowerCase();
+    var videoEl = document.getElementById('ytplayer');
+    if (!videoEl || !videoEl.textTracks) return false;
+    if (selectedSubtitleCode !== 'off') {
+        ensureSubtitleTrack(videoEl, selectedSubtitleCode);
+    }
+    for (var i = 0; i < videoEl.textTracks.length; i++) {
+        var textTrack = videoEl.textTracks[i];
+        var language = String(textTrack.language || '').toLowerCase();
+        var label = String(textTrack.label || '').toLowerCase();
+        var shouldShow = selectedSubtitleCode !== 'off' && (language === selectedSubtitleCode || label.indexOf(selectedSubtitleCode) >= 0);
+        try {
+            textTrack.mode = shouldShow ? 'showing' : 'disabled';
+        } catch (e) {}
+    }
+    return true;
+}
+
+function savePlaybackDefaults(options, shouldReload) {
+    fetch('/api/playback-preferences', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            priority: options.priority || '',
+            player_mode: options.player_mode || playerMode,
+            quality_preference: options.quality_preference || qualityPreference
+        })
+    }).then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data) return;
+        playerMode = data.player_mode || playerMode;
+        qualityPreference = data.quality_preference || qualityPreference;
+        window.dispatchEvent(new CustomEvent('brg:preferences-updated', {detail: data}));
+        if (shouldReload) window.location.reload();
+      }).catch(function() {
+        if (shouldReload) window.location.reload();
+      });
+}
 
 function loadPlaybackPosition() {
     try {
@@ -260,6 +638,10 @@ function toggleFullscreen() {
 
 document.addEventListener('fullscreenchange', updateFsButton);
 document.addEventListener('webkitfullscreenchange', updateFsButton);
+function syncPlayerChrome() {
+    var fsBtn = document.getElementById('fs-toggle');
+    if (fsBtn) fsBtn.style.display = 'none';
+}
 function updateFsButton() {
     var btn = document.getElementById('fs-toggle');
     if (btn) btn.classList.toggle('fs-exit', !!getFullscreenElement() || fallbackFullscreenActive);
@@ -271,21 +653,241 @@ document.addEventListener('keydown', function(event) {
     }
 });
 
-// Replace placeholder div with sandboxed iframe before YT API loads
-(function() {
-    var placeholder = document.getElementById('ytplayer');
-    var iframe = document.createElement('iframe');
-    iframe.id = 'ytplayer';
-    // iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation allow-forms');
-    iframe.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture');
-    iframe.setAttribute('allowfullscreen', '');
-    iframe.src = 'https://www.youtube-nocookie.com/embed/' + videoId
-        + '?enablejsapi=1&autoplay=0&rel=0&modestbranding=1'
-        + '&origin=' + encodeURIComponent(window.location.origin);
-    placeholder.parentNode.replaceChild(iframe, placeholder);
-})();
+function initLocalPlayer() {
+    var videoEl = document.getElementById('ytplayer');
+    if (!videoEl) return;
+
+    function destroyAdaptivePlayer() {
+        if (!hlsInstance) return;
+        hlsInstance.destroy();
+        hlsInstance = null;
+    }
+
+    function stopLocalVideoElement() {
+        destroyAdaptivePlayer();
+        try {
+            videoEl.pause();
+        } catch (e) {}
+        try {
+            videoEl.removeAttribute('src');
+            videoEl.load();
+        } catch (e) {}
+    }
+
+    function attachSource(streamId) {
+        adaptiveNetworkRecoveryAttempts = 0;
+        var sourceUrl = buildMediaUrl(streamId);
+        if (!usingAdaptivePlayback) {
+            destroyAdaptivePlayer();
+            videoEl.src = sourceUrl;
+            videoEl.load();
+            return;
+        }
+        if (window.Hls && window.Hls.isSupported()) {
+            destroyAdaptivePlayer();
+            hlsInstance = new window.Hls({
+                enableWorker: false,
+                startLevel: -1,
+                capLevelToPlayerSize: true,
+                lowLatencyMode: false,
+                abrEwmaDefaultEstimate: 5000000,
+            });
+            hlsInstance.loadSource(sourceUrl);
+            hlsInstance.attachMedia(videoEl);
+            hlsInstance.on(window.Hls.Events.MANIFEST_PARSED, function() {
+                adaptiveNetworkRecoveryAttempts = 0;
+                selectAdaptiveAudioTrack(streamId || initialStreamId);
+                applyQualityPreference(qualityPreference);
+            });
+            hlsInstance.on(window.Hls.Events.AUDIO_TRACKS_UPDATED, function() {
+                selectAdaptiveAudioTrack(streamId || initialStreamId);
+            });
+            hlsInstance.on(window.Hls.Events.LEVELS_UPDATED, function() {
+                applyQualityPreference(qualityPreference);
+            });
+            hlsInstance.on(window.Hls.Events.ERROR, function(_event, data) {
+                if (!data || !data.fatal) return;
+                if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
+                    var statusCode = data.response && data.response.code;
+                    adaptiveNetworkRecoveryAttempts += 1;
+                    if ((statusCode && statusCode >= 500) || adaptiveNetworkRecoveryAttempts > 1) {
+                        stopLocalVideoElement();
+                        fallbackToEmbedPlayer();
+                        return;
+                    }
+                    hlsInstance.startLoad();
+                    return;
+                }
+                if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) {
+                    hlsInstance.recoverMediaError();
+                    return;
+                }
+                stopLocalVideoElement();
+                fallbackToEmbedPlayer();
+            });
+            return;
+        }
+        destroyAdaptivePlayer();
+        videoEl.src = sourceUrl;
+        videoEl.load();
+    }
+
+    player = {
+        el: videoEl,
+        playVideo: function() {
+            var result = videoEl.play();
+            if (result && typeof result.catch === 'function') {
+                result.catch(function() {});
+            }
+        },
+        pauseVideo: function() {
+            videoEl.pause();
+        },
+        seekTo: function(seconds) {
+            videoEl.currentTime = seconds;
+        },
+        getCurrentTime: function() {
+            return videoEl.currentTime || 0;
+        },
+        getDuration: function() {
+            return videoEl.duration || 0;
+        }
+    };
+    createSubtitleTracks(videoEl);
+    videoEl.addEventListener('loadedmetadata', function() {
+        if (usingAdaptivePlayback) {
+            selectNativeAudioTrack(videoEl, adaptiveAudioStreamId || initialStreamId);
+        }
+        applySubtitleSelection(selectedSubtitleCode);
+        restorePlaybackPosition();
+        attemptAutoplayIfActive();
+    });
+    videoEl.addEventListener('play', function() {
+        onPlayerStateChange({data: YT.PlayerState.PLAYING});
+    });
+    videoEl.addEventListener('pause', function() {
+        if (!videoEl.ended) onPlayerStateChange({data: YT.PlayerState.PAUSED});
+    });
+    videoEl.addEventListener('ended', function() {
+        onPlayerStateChange({data: YT.PlayerState.ENDED});
+    });
+    videoEl.addEventListener('error', function() {
+        stopLocalVideoElement();
+        fallbackToEmbedPlayer();
+    });
+    attachSource(initialStreamId);
+    sortAudioLanguageOptions(document.getElementById('audio-priority-input') ? document.getElementById('audio-priority-input').value : '');
+    var menuToggle = document.getElementById('player-menu-toggle');
+    var menuPanel = document.getElementById('player-menu');
+    if (menuToggle && menuPanel) {
+        menuToggle.addEventListener('click', function(event) {
+            event.stopPropagation();
+            menuPanel.classList.toggle('open');
+        });
+        menuPanel.addEventListener('click', function(event) {
+            event.stopPropagation();
+        });
+        document.addEventListener('click', function() {
+            menuPanel.classList.remove('open');
+        });
+    }
+    var selector = document.getElementById('audio-language-select');
+    if (selector) {
+        selector.addEventListener('change', function() {
+            var resumeAt = videoEl.currentTime || 0;
+            var shouldResume = !videoEl.paused && !videoEl.ended;
+            autoplayPending = false;
+            videoEl.pause();
+            if (usingAdaptivePlayback && hlsInstance && hlsInstance.audioTracks && hlsInstance.audioTracks.length) {
+                selectAdaptiveAudioTrack(selector.value);
+                if (resumeAt > 0) {
+                    try {
+                        videoEl.currentTime = resumeAt;
+                    } catch (e) {}
+                }
+                if (shouldResume) {
+                    var adaptiveResult = videoEl.play();
+                    if (adaptiveResult && typeof adaptiveResult.catch === 'function') {
+                        adaptiveResult.catch(function() {});
+                    }
+                }
+                return;
+            }
+            if (usingAdaptivePlayback && selectNativeAudioTrack(videoEl, selector.value)) {
+                adaptiveAudioStreamId = selector.value;
+                if (resumeAt > 0) {
+                    try {
+                        videoEl.currentTime = resumeAt;
+                    } catch (e) {}
+                }
+                if (shouldResume) {
+                    var nativeResult = videoEl.play();
+                    if (nativeResult && typeof nativeResult.catch === 'function') {
+                        nativeResult.catch(function() {});
+                    }
+                }
+                return;
+            }
+            videoEl.addEventListener('loadedmetadata', function restoreAfterSwitch() {
+                videoEl.removeEventListener('loadedmetadata', restoreAfterSwitch);
+                if (resumeAt > 0) {
+                    try {
+                        videoEl.currentTime = resumeAt;
+                    } catch (e) {}
+                }
+                if (shouldResume) {
+                    var result = videoEl.play();
+                    if (result && typeof result.catch === 'function') {
+                        result.catch(function() {});
+                    }
+                }
+            });
+            attachSource(selector.value);
+        });
+    }
+    var subtitleSelector = document.getElementById('subtitle-language-select');
+    if (subtitleSelector) {
+        subtitleSelector.addEventListener('change', function() {
+            applySubtitleSelection(subtitleSelector.value);
+        });
+    }
+    var qualitySelector = document.getElementById('quality-select');
+    if (qualitySelector) {
+        qualitySelector.addEventListener('change', function() {
+            applyQualityPreference(qualitySelector.value);
+            savePlaybackDefaults({
+                priority: document.getElementById('audio-priority-input') ? document.getElementById('audio-priority-input').value : '',
+                quality_preference: qualitySelector.value,
+                player_mode: playerMode
+            }, false);
+        });
+    }
+    var playerModeSelector = document.getElementById('player-mode-select');
+    function handlePlayerModeChange(nextValue) {
+        savePlaybackDefaults({
+            priority: document.getElementById('audio-priority-input') ? document.getElementById('audio-priority-input').value : '',
+            quality_preference: qualityPreference,
+            player_mode: nextValue
+        }, true);
+    }
+    if (playerModeSelector) {
+        playerModeSelector.addEventListener('change', function() {
+            handlePlayerModeChange(playerModeSelector.value);
+        });
+    }
+    window.addEventListener('beforeunload', destroyAdaptivePlayer);
+}
+
+if (!usingLocalPlayback) {
+    mountEmbedPlayer();
+} else {
+    initLocalPlayer();
+}
+syncPlayerChrome();
 
 function onYouTubeIframeAPIReady() {
+    if (!usingEmbedFallback) return;
+    syncPlayerChrome();
     player = new YT.Player('ytplayer', {
         events: {
             'onReady': function() {
@@ -468,21 +1070,10 @@ function tickCountdown() {
 }
 
 function updateTimeDisplay() {
-    var counterEl = document.getElementById('time-counter');
     var warningEl = document.getElementById('time-warning');
     var criticalEl = document.getElementById('time-critical');
-    var remainingEl = document.getElementById('time-remaining');
     var budgetEl = document.getElementById('watch-time-budget');
     var budgetPrimaryEl = document.getElementById('watch-time-budget-primary');
-    if (!counterEl || !remainingEl) return;
-
-    if (remainingSeconds > 60) {
-        var min = Math.max(0, Math.ceil(remainingSeconds / 60));
-        counterEl.textContent = min + ' min';
-    } else {
-        counterEl.textContent = Math.max(0, remainingSeconds) + ' sec';
-        counterEl.className = 'time-low';
-    }
 
     if (budgetEl && budgetPrimaryEl && limitMinutes > 0) {
         var usedSeconds = Math.max(0, (limitMinutes * 60) - Math.max(0, remainingSeconds));
@@ -510,6 +1101,33 @@ function updateTimeDisplay() {
         if (warningEl) warningEl.style.display = 'none';
     }
 }
+
+window.addEventListener('brg:preferences-updated', function(event) {
+    var detail = (event && event.detail) || {};
+    if (detail.player_mode && detail.player_mode !== playerMode) {
+        window.location.reload();
+        return;
+    }
+    if (detail.player_mode) {
+        playerMode = detail.player_mode;
+        var playerModeSelector = document.getElementById('player-mode-select');
+        if (playerModeSelector) playerModeSelector.value = playerMode;
+    }
+    if (detail.quality_preference) {
+        qualityPreference = detail.quality_preference;
+        applyQualityPreference(qualityPreference);
+    }
+    if (detail.priority && usingLocalPlayback) {
+        sortAudioLanguageOptions(detail.priority);
+        var selector = document.getElementById('audio-language-select');
+        var streamId = chooseDefaultAudioStream(detail.priority);
+        if (selector && streamId && selector.value !== streamId) {
+            selector.value = streamId;
+            selector.dispatchEvent(new Event('change'));
+        }
+    }
+    syncLocalPlaybackControls();
+});
 
 function timesUp() {
     accountPlaybackElapsed();

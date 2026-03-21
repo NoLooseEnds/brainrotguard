@@ -24,6 +24,11 @@ class _DummyUpdate:
         self.effective_message = self.message
 
 
+class _DummyContext:
+    def __init__(self, args=None):
+        self.args = args or []
+
+
 class _DummyQueryMessage:
     def __init__(self, chat_id: int = 1):
         self.chat_id = chat_id
@@ -204,5 +209,35 @@ def test_revoke_toast_uses_dedicated_localized_key(tmp_path):
         asyncio.run(_run())
 
         assert query.answers == ["Fjernet!"]
+    finally:
+        store.close()
+
+
+def test_audio_command_updates_priority_for_default_profile(tmp_path):
+    bot, store = _make_bot(tmp_path)
+    try:
+        update = _DummyUpdate("/audio nb, sv, english", chat_id=-100123456)
+        context = _DummyContext(["nb,", "sv,", "english"])
+
+        asyncio.run(bot._cmd_audio(update, context))
+
+        assert store.get_setting("default:audio_language_priority") == "no, sv, en"
+        assert update.message.replies
+        assert "no, sv, en" in update.message.replies[0][0]
+    finally:
+        store.close()
+
+
+def test_player_command_rejects_invalid_mode(tmp_path):
+    bot, store = _make_bot(tmp_path)
+    try:
+        update = _DummyUpdate("/player magic", chat_id=-100123456)
+        context = _DummyContext(["magic"])
+
+        asyncio.run(bot._cmd_player(update, context))
+
+        assert store.get_setting("default:player_mode", "") == ""
+        assert update.message.replies
+        assert "Ugyldig avspillingsmodus: magic" == update.message.replies[0][0]
     finally:
         store.close()

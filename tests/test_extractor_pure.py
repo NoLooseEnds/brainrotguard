@@ -7,7 +7,10 @@ from youtube.extractor import (
     format_duration,
     _safe_thumbnail,
     _is_short_url,
+    _build_playback_payload,
     THUMB_ALLOWED_HOSTS,
+    normalize_audio_language,
+    parse_audio_language_priority,
 )
 
 
@@ -100,3 +103,205 @@ class TestIsShortUrl:
 
     def test_empty(self):
         assert _is_short_url("") is False
+
+
+class TestAudioLanguagePriority:
+    def test_normalize_audio_language_aliases(self):
+        assert normalize_audio_language("nb_NO") == "no"
+        assert normalize_audio_language("Norwegian") == "no"
+        assert normalize_audio_language("sv-SE") == "sv"
+        assert normalize_audio_language("english") == "en"
+
+    def test_parse_audio_language_priority_deduplicates_and_defaults(self):
+        assert parse_audio_language_priority("nb, no, sv, english") == ["no", "sv", "en"]
+        assert parse_audio_language_priority("") == ["no", "sv", "en"]
+
+
+class TestBuildPlaybackPayload:
+    def test_build_playback_payload_selects_preferred_language(self):
+        info = {
+            "title": "Dubbed Video",
+            "duration": 120,
+            "formats": [
+                {
+                    "format_id": "22",
+                    "protocol": "https",
+                    "url": "https://rr1---sn-test.googlevideo.com/videoplayback?id=22",
+                    "acodec": "mp4a.40.2",
+                    "vcodec": "avc1.4d401f",
+                    "ext": "mp4",
+                    "language": "en",
+                    "height": 720,
+                    "width": 1280,
+                    "format_note": "English",
+                },
+                {
+                    "format_id": "23",
+                    "protocol": "https",
+                    "url": "https://rr1---sn-test.googlevideo.com/videoplayback?id=23",
+                    "acodec": "mp4a.40.2",
+                    "vcodec": "avc1.4d401f",
+                    "ext": "mp4",
+                    "language": "no",
+                    "height": 720,
+                    "width": 1280,
+                    "format_note": "Norwegian",
+                },
+            ],
+        }
+
+        payload = _build_playback_payload("abc12345678", info, "no, en")
+
+        assert payload is not None
+        assert payload["selected_language"] == "no"
+        assert payload["selected_stream_id"] == "23:no"
+        assert [option["code"] for option in payload["language_options"]] == ["no", "en"]
+
+    def test_build_playback_payload_prefers_hls_multi_audio_when_available(self):
+        info = {
+            "title": "Adaptive Dubbed Video",
+            "duration": 240,
+            "formats": [
+                {
+                    "format_id": "233-hls-0",
+                    "protocol": "m3u8_native",
+                    "url": "https://manifest.googlevideo.com/api/manifest/hls_audio_no.m3u8",
+                    "acodec": "mp4a.40.2",
+                    "vcodec": "none",
+                    "ext": "mp4",
+                    "language": "nb-NO",
+                    "format_note": "Norwegian",
+                },
+                {
+                    "format_id": "233-hls-1",
+                    "protocol": "m3u8_native",
+                    "url": "https://manifest.googlevideo.com/api/manifest/hls_audio_en.m3u8",
+                    "acodec": "mp4a.40.2",
+                    "vcodec": "none",
+                    "ext": "mp4",
+                    "language": "en-US",
+                    "format_note": "English",
+                },
+                {
+                    "format_id": "234-hls-1",
+                    "protocol": "m3u8_native",
+                    "url": "https://manifest.googlevideo.com/api/manifest/hls_audio_en_high.m3u8",
+                    "acodec": "mp4a.40.2",
+                    "vcodec": "none",
+                    "ext": "mp4",
+                    "language": "en-US",
+                    "format_note": "English",
+                    "tbr": 192,
+                },
+                {
+                    "format_id": "231-hls",
+                    "protocol": "m3u8_native",
+                    "url": "https://manifest.googlevideo.com/api/manifest/hls_720.m3u8",
+                    "acodec": "none",
+                    "vcodec": "avc1.64001F",
+                    "ext": "mp4",
+                    "width": 1280,
+                    "height": 720,
+                    "tbr": 2400,
+                },
+            ],
+        }
+
+        payload = _build_playback_payload("abc12345678", info, "no, en")
+
+        assert payload is not None
+        assert payload["mode"] == "hls"
+        assert payload["master_manifest_url"] == "https://manifest.googlevideo.com/api/manifest/hls_audio_no.m3u8"
+        assert payload["selected_language"] == "no"
+        assert payload["selected_stream_id"] == "233-hls-0:no"
+        assert {track["language"] for track in payload["audio_tracks"]} == {"no", "en"}
+        assert any(track["stream_id"] == "234-hls-1:en" for track in payload["audio_tracks"])
+        assert payload["video_variants"][0]["format_id"] == "231-hls"
+
+    def test_build_playback_payload_falls_back_to_english_when_priority_missing(self):
+        info = {
+            "title": "Dubbed Video",
+            "duration": 120,
+            "formats": [
+                {
+                    "format_id": "22",
+                    "protocol": "https",
+                    "url": "https://rr1---sn-test.googlevideo.com/videoplayback?id=22",
+                    "acodec": "mp4a.40.2",
+                    "vcodec": "avc1.4d401f",
+                    "ext": "mp4",
+                    "language": "sv",
+                    "height": 720,
+                    "width": 1280,
+                    "format_note": "Swedish",
+                },
+                {
+                    "format_id": "23",
+                    "protocol": "https",
+                    "url": "https://rr1---sn-test.googlevideo.com/videoplayback?id=23",
+                    "acodec": "mp4a.40.2",
+                    "vcodec": "avc1.4d401f",
+                    "ext": "mp4",
+                    "language": "en",
+                    "height": 720,
+                    "width": 1280,
+                    "format_note": "English",
+                },
+            ],
+        }
+
+        payload = _build_playback_payload("abc12345678", info, "no")
+
+        assert payload is not None
+        assert payload["selected_language"] == "en"
+        assert payload["selected_stream_id"] == "23:en"
+
+    def test_build_playback_payload_filters_translated_auto_subtitles(self):
+        info = {
+            "title": "Captioned Video",
+            "duration": 120,
+            "formats": [
+                {
+                    "format_id": "22",
+                    "protocol": "https",
+                    "url": "https://rr1---sn-test.googlevideo.com/videoplayback?id=22",
+                    "acodec": "mp4a.40.2",
+                    "vcodec": "avc1.4d401f",
+                    "ext": "mp4",
+                    "language": "en",
+                    "height": 720,
+                    "width": 1280,
+                },
+            ],
+            "subtitles": {
+                "en": [
+                    {
+                        "ext": "vtt",
+                        "url": "https://www.youtube.com/api/timedtext?v=abc12345678&lang=en&fmt=vtt",
+                        "name": "English",
+                    }
+                ]
+            },
+            "automatic_captions": {
+                "sv": [
+                    {
+                        "ext": "vtt",
+                        "url": "https://www.youtube.com/api/timedtext?v=abc12345678&lang=en&tlang=sv&fmt=vtt",
+                        "name": "Swedish",
+                    }
+                ],
+                "en": [
+                    {
+                        "ext": "vtt",
+                        "url": "https://www.youtube.com/api/timedtext?v=abc12345678&kind=asr&lang=en&fmt=vtt",
+                        "name": "English",
+                    }
+                ],
+            },
+        }
+
+        payload = _build_playback_payload("abc12345678", info, "en")
+
+        assert payload is not None
+        assert [option["code"] for option in payload["subtitle_options"]] == ["en"]
+        assert payload["subtitle_options"][0]["auto"] is False

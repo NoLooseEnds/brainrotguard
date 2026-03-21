@@ -31,7 +31,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "https://i3.ytimg.com https://i4.ytimg.com https://i9.ytimg.com https://img.youtube.com; "
             "frame-src https://www.youtube-nocookie.com; "
             "connect-src 'self'; "
-            "media-src https://*.googlevideo.com; "
+            "media-src 'self' blob: https://*.googlevideo.com; "
             "worker-src 'self'; "
             "object-src 'none'; "
             "base-uri 'self'"

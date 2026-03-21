@@ -1210,6 +1210,7 @@
     var activeCollapseBtn = document.getElementById('active-collapse-btn');
     var activeFillPromise = null;
     var activeFilterPriming = false;
+    var warmedPlaybackIds = {};
     if (activeCollapseBtn) {
         activeCollapseBtn.addEventListener('click', function() {
             writeActiveSectionCollapsed(!activeSectionCollapsed);
@@ -1223,6 +1224,42 @@
     bindActiveDismissAll();
     filterRequests();
     syncActiveSectionVisibility();
+    function warmPlayback(videoId) {
+        if (!videoId || warmedPlaybackIds[videoId]) return;
+        warmedPlaybackIds[videoId] = true;
+        fetch('/api/watch-preload/' + encodeURIComponent(videoId), {
+            credentials: 'same-origin'
+        }).catch(function() {});
+    }
+
+    function warmVisiblePlaybackCards() {
+        var ids = [];
+        document.querySelectorAll('.hero-slide, .video-card, .shorts-card').forEach(function(card) {
+            var href = card.getAttribute('href') || '';
+            var match = href.match(/\/watch\/([A-Za-z0-9_-]{11})/);
+            if (match && ids.indexOf(match[1]) === -1) ids.push(match[1]);
+        });
+        ids.slice(0, 8).forEach(warmPlayback);
+    }
+
+    document.querySelectorAll('a[href^="/watch/"]').forEach(function(link) {
+        link.addEventListener('pointerenter', function() {
+            var href = link.getAttribute('href') || '';
+            var match = href.match(/\/watch\/([A-Za-z0-9_-]{11})/);
+            if (match) warmPlayback(match[1]);
+        });
+        link.addEventListener('touchstart', function() {
+            var href = link.getAttribute('href') || '';
+            var match = href.match(/\/watch\/([A-Za-z0-9_-]{11})/);
+            if (match) warmPlayback(match[1]);
+        }, {passive: true});
+    });
+
+    if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(warmVisiblePlaybackCards, {timeout: 1200});
+    } else {
+        window.setTimeout(warmVisiblePlaybackCards, 800);
+    }
 })();
 </script>
 {% endblock %}

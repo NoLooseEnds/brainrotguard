@@ -571,6 +571,15 @@ main {
     border: none;
 }
 
+.video-player .video-wrapper .local-video-player {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #000;
+}
+
 /* Custom fullscreen button */
 .fs-toggle {
     position: absolute;
@@ -630,7 +639,9 @@ main {
     justify-content: center;
 }
 .video-wrapper:fullscreen iframe,
-.video-wrapper:-webkit-full-screen iframe {
+.video-wrapper:-webkit-full-screen iframe,
+.video-wrapper:fullscreen .local-video-player,
+.video-wrapper:-webkit-full-screen .local-video-player {
     position: relative;
     width: 100%;
     height: 100%;
@@ -661,7 +672,8 @@ main {
     z-index: 450;
 }
 
-.video-wrapper.video-wrapper-fallback-fullscreen iframe {
+.video-wrapper.video-wrapper-fallback-fullscreen iframe,
+.video-wrapper.video-wrapper-fallback-fullscreen .local-video-player {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -674,6 +686,87 @@ main {
     right: 16px;
     width: 44px;
     height: 44px;
+}
+
+.player-menu-toggle {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 12;
+    width: 38px;
+    height: 38px;
+    border: none;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.66);
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+.video-wrapper:hover .player-menu-toggle,
+.video-wrapper:active .player-menu-toggle,
+.video-wrapper:focus-within .player-menu-toggle {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (hover: none) {
+    .player-menu-toggle {
+        opacity: 0.7;
+        pointer-events: auto;
+    }
+}
+
+.player-menu-panel {
+    position: absolute;
+    top: 56px;
+    right: 10px;
+    z-index: 12;
+    display: none;
+    width: min(260px, calc(100% - 20px));
+    padding: 14px;
+    border-radius: 16px;
+    background: rgba(10, 14, 24, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(14px);
+}
+
+.player-menu-panel.open {
+    display: block;
+}
+
+.player-menu-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.player-menu-field:last-child {
+    margin-bottom: 0;
+}
+
+.player-menu-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.player-menu-select {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 11px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-primary);
 }
 
 
@@ -2176,6 +2269,10 @@ main {
         position: relative;
         height: 100%;
     }
+    .watch-container-short .video-player .video-wrapper .local-video-player {
+        position: relative;
+        height: 100%;
+    }
 }
 
 /* === Search Dropdown === */
@@ -2198,6 +2295,33 @@ main {
     padding: 16px;
     z-index: 150;
     animation: avatar-dd-in 0.15s ease-out;
+}
+
+.pwa-refresh-indicator {
+    position: fixed;
+    top: calc(var(--safe-top) + 10px);
+    left: 50%;
+    z-index: 500;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(15, 15, 35, 0.92);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    transform: translate(-50%, -80px);
+    transition: transform 0.18s ease, opacity 0.18s ease, border-color 0.18s ease;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.pwa-refresh-indicator.visible {
+    opacity: 1;
+}
+
+.pwa-refresh-indicator.armed {
+    border-color: rgba(233, 69, 96, 0.45);
 }
 
 /* Mobile: override dropdown positioning AFTER base styles so cascade wins */
@@ -2382,10 +2506,134 @@ main {
     color: var(--accent);
 }
 
+.avatar-menu-button {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 12px 0 0;
+    background: none;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    border-top: 1px solid var(--border-subtle);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.3;
+}
+
+.avatar-menu-button + .avatar-menu-link {
+    border-top: none;
+    padding-top: 10px;
+}
+
 .avatar-menu-link + .avatar-menu-link,
 .avatar-menu-link + .avatar-switch-link {
     border-top: none;
     padding-top: 10px;
+}
+
+.avatar-setting-group {
+    margin-bottom: 14px;
+}
+
+.avatar-setting-row {
+    display: flex;
+    gap: 8px;
+}
+
+.avatar-setting-input {
+    flex: 1;
+    min-width: 0;
+    padding: 9px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-primary);
+}
+
+.avatar-setting-save {
+    padding: 9px 12px;
+    border: 1px solid rgba(233, 69, 96, 0.3);
+    border-radius: 10px;
+    background: rgba(233, 69, 96, 0.12);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.avatar-setting-save-full {
+    display: block;
+    width: 100%;
+    margin: 0 0 14px;
+}
+
+body.modal-open {
+    overflow: hidden;
+}
+
+.settings-modal[hidden] {
+    display: none;
+}
+
+.settings-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 600;
+}
+
+.settings-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(6, 9, 18, 0.72);
+    backdrop-filter: blur(8px);
+}
+
+.settings-modal-dialog {
+    position: relative;
+    width: min(460px, calc(100vw - 24px));
+    margin: max(40px, calc(var(--safe-top) + 20px)) auto 0;
+    background: linear-gradient(180deg, rgba(21, 25, 39, 0.98), rgba(14, 18, 30, 0.98));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+}
+
+.settings-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 18px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.settings-modal-close {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.settings-modal-body {
+    padding: 18px;
+}
+
+.settings-modal-actions {
+    padding: 0 18px 18px;
 }
 
 .active-card {

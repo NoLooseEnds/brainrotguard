@@ -61,11 +61,64 @@
                     <button type="button" class="color-option{% if c == avatar_color %} selected{% endif %}" data-color="{{ c }}" style="background:{{ c }}"></button>
                     {% endfor %}
                 </div>
+                <button type="button" id="open-playback-settings" class="avatar-menu-link avatar-menu-button">{{ t("Playback Settings") }}</button>
                 <a href="/requests" class="avatar-menu-link"><svg class="avatar-menu-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1v6m0 0l-2.5-2.5M8 7l2.5-2.5"/><rect x="2" y="9" width="12" height="5" rx="1.5"/></svg>{{ t("Requests") }}</a>
                 <a href="/history" class="avatar-menu-link"><svg class="avatar-menu-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5l2.5 1.5"/></svg>{{ t("History") }}</a>
                 {% if multi_profile %}
                 <a href="/switch-profile" class="avatar-switch-link"><svg class="avatar-menu-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><path d="M11 14c0-2.2-2.2-4-5-4s-5 1.8-5 4"/><path d="M11 5l2 2 2-2"/></svg>{{ t("Switch Profile") }}</a>
                 {% endif %}
+            </div>
+        </div>
+        <div id="playback-settings-modal" class="settings-modal" hidden>
+            <div class="settings-modal-backdrop" data-close-playback-settings="1"></div>
+            <div class="settings-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="playback-settings-title">
+                <div class="settings-modal-header">
+                    <h2 id="playback-settings-title" class="settings-modal-title">{{ t("Playback Settings") }}</h2>
+                    <button type="button" id="close-playback-settings" class="settings-modal-close" aria-label="{{ t('Close') }}">&#10005;</button>
+                </div>
+                <div class="settings-modal-body">
+                    <div class="avatar-setting-group" data-local-preference="1">
+                        <div class="avatar-dd-label">{{ t("Audio Language Order") }}</div>
+                        <div class="avatar-setting-row">
+                            <input
+                                id="audio-priority-input"
+                                type="text"
+                                class="avatar-setting-input"
+                                value="{{ audio_language_priority }}"
+                                placeholder="no, sv, en"
+                                autocapitalize="off"
+                                spellcheck="false"
+                            >
+                        </div>
+                    </div>
+                    <div class="avatar-setting-group">
+                        <div class="avatar-dd-label">{{ t("Player Mode") }}</div>
+                        <div class="avatar-setting-row">
+                            <select id="player-mode-input" class="avatar-setting-input">
+                                <option value="auto" {% if player_mode == "auto" %}selected{% endif %}>{{ t("Auto") }}</option>
+                                <option value="local" {% if player_mode == "local" %}selected{% endif %}>{{ t("Local Player") }}</option>
+                                <option value="embed" {% if player_mode == "embed" %}selected{% endif %}>{{ t("YouTube Embed") }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="avatar-setting-group" data-local-preference="1">
+                        <div class="avatar-dd-label">{{ t("Preferred Quality") }}</div>
+                        <div class="avatar-setting-row">
+                            <select id="quality-preference-input" class="avatar-setting-input">
+                                <option value="auto" {% if quality_preference == "auto" %}selected{% endif %}>{{ t("Auto") }}</option>
+                                <option value="360" {% if quality_preference == "360" %}selected{% endif %}>360p</option>
+                                <option value="720" {% if quality_preference == "720" %}selected{% endif %}>720p</option>
+                                <option value="1080" {% if quality_preference == "1080" %}selected{% endif %}>1080p</option>
+                                <option value="1440" {% if quality_preference == "1440" %}selected{% endif %}>1440p</option>
+                                <option value="2160" {% if quality_preference == "2160" %}selected{% endif %}>4K</option>
+                                <option value="best" {% if quality_preference == "best" %}selected{% endif %}>{{ t("Best Available") }}</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-modal-actions">
+                    <button type="button" id="playback-preferences-save" class="avatar-setting-save avatar-setting-save-full">{{ t("Save") }}</button>
+                </div>
             </div>
         </div>
         {% endif %}
@@ -90,6 +143,59 @@
                 navigator.serviceWorker.register("/service-worker.js").catch(function () {});
             });
         }
+    })();
+    </script>
+    <script>
+    (function () {
+        var standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+        if (!standalone) return;
+        var indicator = document.createElement('div');
+        indicator.className = 'pwa-refresh-indicator';
+        indicator.textContent = {{ t("Pull to refresh") | tojson }};
+        document.body.appendChild(indicator);
+        var startY = 0;
+        var pulling = false;
+        var armed = false;
+
+        function resetIndicator() {
+            indicator.classList.remove('visible');
+            indicator.classList.remove('armed');
+            indicator.style.transform = 'translate(-50%, -80px)';
+        }
+
+        document.addEventListener('touchstart', function (event) {
+            if (event.touches.length !== 1) return;
+            if ((document.scrollingElement || document.documentElement).scrollTop > 0) return;
+            if (event.target.closest('input, select, textarea, button, video, .video-wrapper')) return;
+            startY = event.touches[0].clientY;
+            pulling = true;
+            armed = false;
+        }, { passive: true });
+
+        document.addEventListener('touchmove', function (event) {
+            if (!pulling) return;
+            var delta = event.touches[0].clientY - startY;
+            if (delta <= 0) {
+                pulling = false;
+                resetIndicator();
+                return;
+            }
+            var offset = Math.min(delta, 96);
+            indicator.classList.add('visible');
+            indicator.style.transform = 'translate(-50%, ' + (offset - 80) + 'px)';
+            armed = delta >= 72;
+            indicator.classList.toggle('armed', armed);
+        }, { passive: true });
+
+        document.addEventListener('touchend', function () {
+            if (!pulling) return;
+            pulling = false;
+            var shouldReload = armed;
+            resetIndicator();
+            if (shouldReload) window.location.reload();
+        }, { passive: true });
+
+        resetIndicator();
     })();
     </script>
     <script>
@@ -201,8 +307,34 @@
         if(!wrap) return;
         var dd=wrap.querySelector('.avatar-dropdown');
         var av=document.getElementById('hdr-avatar');
+        var playbackModal=document.getElementById('playback-settings-modal');
+        var openPlaybackSettings=document.getElementById('open-playback-settings');
+        var closePlaybackSettings=document.getElementById('close-playback-settings');
+        var showPlaybackSettings=function(){
+            if(!playbackModal) return;
+            playbackModal.hidden=false;
+            document.body.classList.add('modal-open');
+            dd.classList.remove('open');
+        };
+        var hidePlaybackSettings=function(){
+            if(!playbackModal) return;
+            playbackModal.hidden=true;
+            document.body.classList.remove('modal-open');
+        };
         // Close on outside click
         document.addEventListener('click',function(e){if(!wrap.contains(e.target))dd.classList.remove('open')});
+        if(openPlaybackSettings){openPlaybackSettings.addEventListener('click',showPlaybackSettings)}
+        if(closePlaybackSettings){closePlaybackSettings.addEventListener('click',hidePlaybackSettings)}
+        if(playbackModal){
+            playbackModal.addEventListener('click',function(e){
+                if(e.target && e.target.dataset && e.target.dataset.closePlaybackSettings==='1'){
+                    hidePlaybackSettings();
+                }
+            });
+            document.addEventListener('keydown',function(e){
+                if(e.key==='Escape'&&!playbackModal.hidden){hidePlaybackSettings()}
+            });
+        }
         // Icon selection
         dd.querySelectorAll('.avatar-option').forEach(function(btn){
             btn.addEventListener('click',function(){
@@ -223,6 +355,44 @@
                 fetch('/api/avatar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({color:color})});
             });
         });
+        var audioInput=document.getElementById('audio-priority-input');
+        var playerModeInput=document.getElementById('player-mode-input');
+        var qualityInput=document.getElementById('quality-preference-input');
+        var playbackSave=document.getElementById('playback-preferences-save');
+        var syncLocalPreferenceVisibility=function(){
+            if(!playerModeInput) return;
+            var showLocal=playerModeInput.value==='local';
+            document.querySelectorAll('[data-local-preference="1"]').forEach(function(node){
+                node.hidden=!showLocal;
+            });
+        };
+        if(audioInput&&playerModeInput&&qualityInput&&playbackSave){
+            var savePlaybackPreferences=function(){
+                fetch('/api/playback-preferences',{
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({
+                        priority:audioInput.value,
+                        player_mode:playerModeInput.value,
+                        quality_preference:qualityInput.value
+                    })
+                }).then(function(r){return r.ok?r.json():null}).then(function(data){
+                    if(!data) return;
+                    if(data.priority){audioInput.value=data.priority}
+                    if(data.player_mode){playerModeInput.value=data.player_mode}
+                    if(data.quality_preference){qualityInput.value=data.quality_preference}
+                    syncLocalPreferenceVisibility();
+                    window.dispatchEvent(new CustomEvent('brg:preferences-updated', {detail: data}));
+                    hidePlaybackSettings();
+                }).catch(function(){});
+            };
+            playbackSave.addEventListener('click',savePlaybackPreferences);
+            playerModeInput.addEventListener('change',syncLocalPreferenceVisibility);
+            audioInput.addEventListener('keydown',function(e){
+                if(e.key==='Enter'){e.preventDefault();savePlaybackPreferences()}
+            });
+            syncLocalPreferenceVisibility();
+        }
     })();
     </script>
 </body>

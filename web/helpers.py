@@ -3,12 +3,14 @@
 from typing import Optional
 import re
 import secrets
+from urllib.parse import urlsplit
 
 from fastapi import Request
 from pydantic import BaseModel, Field
 
 from data.child_store import ChildStore
 from i18n import format_time, normalize_locale, normalize_time_format, t
+from youtube.extractor import parse_audio_language_priority
 from utils import (
     get_today_str, get_day_utc_bounds, get_weekday,
     is_within_schedule, resolve_setting,
@@ -41,12 +43,27 @@ _ERROR_MESSAGES = {
 # Heartbeat dedup
 _HEARTBEAT_MIN_INTERVAL = 8    # seconds (must be < client heartbeat interval)
 _HEARTBEAT_EVICT_AGE = 120     # evict entries older than this (seconds)
+DEFAULT_AUDIO_LANGUAGE_PRIORITY = "no, sv, en"
+DEFAULT_PLAYER_MODE = "auto"
+DEFAULT_QUALITY_PREFERENCE = "auto"
+PLAYER_MODE_OPTIONS = {"embed", "auto", "local"}
+QUALITY_PREFERENCE_OPTIONS = {"auto", "360", "720", "1080", "1440", "2160", "best"}
 
 
 class HeartbeatRequest(BaseModel):
     video_id: str
     seconds: int
     position_seconds: Optional[int] = Field(None, ge=0, le=86400)
+
+
+class AudioPreferenceRequest(BaseModel):
+    priority: str = ""
+
+
+class PlaybackPreferenceRequest(BaseModel):
+    priority: str = ""
+    player_mode: str = ""
+    quality_preference: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +113,16 @@ def base_ctx(request: Request) -> dict:
                 request.session["avatar_icon"] = avatar_icon
             if avatar_color:
                 request.session["avatar_color"] = avatar_color
+    audio_language_priority = DEFAULT_AUDIO_LANGUAGE_PRIORITY
+    if request.session.get("child_id") and vs:
+        child_store = ChildStore(vs, request.session["child_id"])
+        stored_priority = child_store.get_setting("audio_language_priority", "")
+        audio_language_priority = format_audio_language_priority(stored_priority)
+        player_mode = format_player_mode(child_store.get_setting("player_mode", ""))
+        quality_preference = format_quality_preference(child_store.get_setting("quality_preference", ""))
+    else:
+        player_mode = DEFAULT_PLAYER_MODE
+        quality_preference = DEFAULT_QUALITY_PREFERENCE
     return {
         "request": request,
         "locale": locale,
@@ -106,9 +133,41 @@ def base_ctx(request: Request) -> dict:
         "avatar_color": avatar_color,
         "avatar_icons": AVATAR_ICONS,
         "avatar_colors": AVATAR_COLORS,
+        "audio_language_priority": audio_language_priority,
+        "player_mode": player_mode,
+        "quality_preference": quality_preference,
     }
 
 
+def format_audio_language_priority(raw: str) -> str:
+    """Normalize persisted language priority input for display and matching."""
+    values = parse_audio_language_priority(raw)
+    return ", ".join(values) if values else DEFAULT_AUDIO_LANGUAGE_PRIORITY
+
+
+def format_player_mode(raw: str) -> str:
+    """Normalize persisted player mode values."""
+    value = (raw or "").strip().lower()
+    return value if value in PLAYER_MODE_OPTIONS else DEFAULT_PLAYER_MODE
+
+
+def format_quality_preference(raw: str) -> str:
+    """Normalize persisted playback quality preference values."""
+    value = (raw or "").strip().lower()
+    return value if value in QUALITY_PREFERENCE_OPTIONS else DEFAULT_QUALITY_PREFERENCE
+
+
+def get_external_origin(request: Request) -> str:
+    """Return the scheme+host[:port] that embeds should use as their JS API origin."""
+    web_cfg = getattr(request.app.state, "web_config", None)
+    base_url = getattr(web_cfg, "base_url", "") if web_cfg else ""
+    if base_url:
+        parsed = urlsplit(base_url)
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}"
+
+    parsed = urlsplit(str(request.base_url))
+    return f"{parsed.scheme}://{parsed.netloc}"
 def format_views(count) -> str:
     """Format view count: 847, 527K, 2.3M."""
     if not count:
