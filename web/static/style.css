@@ -481,8 +481,6 @@ main {
 .requests-page > .back-link {
     justify-self: start;
 }
-
-
 .requests-page-section {
     display: grid;
     gap: 0.9rem;

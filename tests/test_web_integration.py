@@ -245,6 +245,8 @@ class TestPageLoads:
     def test_home_includes_active_row(self, auth_client):
         resp = auth_client.get("/")
         assert resp.status_code == 200
+        assert 'href="/history"' in resp.text
+        assert 'href="/requests"' in resp.text
         assert "active-dismiss-btn" in resp.text
         assert "active-dismiss-icon" in resp.text
         assert "active-empty-state" in resp.text
@@ -262,6 +264,23 @@ class TestPageLoads:
         assert 'id="active-collapse-btn"' in resp.text
         assert 'id="catalog-collapse-btn"' in resp.text
         assert "brg-section-collapsed:" in resp.text
+
+    def test_requests_page_shows_pending_and_one_off_approved_videos(self, auth_client, store):
+        cs = ChildStore(store, "default")
+        cs.add_channel("Allowed Ch", "allowed", channel_id="UCallowed")
+        cs.add_video("pendreq1234", "Pending Request", "One Off Ch", channel_id="UConeoff", duration=180)
+        cs.add_video("apprreq1234", "Approved Request", "One Off Ch", channel_id="UConeoff", duration=180)
+        cs.update_status("apprreq1234", "approved")
+        cs.add_video("allowreq1234", "Allowed Channel Video", "Allowed Ch", channel_id="UCallowed", duration=180)
+        cs.update_status("allowreq1234", "approved")
+
+        resp = auth_client.get("/requests")
+
+        assert resp.status_code == 200
+        assert "Pending Request" in resp.text
+        assert "Approved Request" in resp.text
+        assert "Allowed Channel Video" not in resp.text
+        assert "Approved by Request" in resp.text
 
     def test_home_active_row_shows_watch_progress_bar_for_started_video(self, auth_client, store):
         cs = ChildStore(store, "default")
