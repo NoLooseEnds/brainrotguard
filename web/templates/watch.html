@@ -90,6 +90,7 @@ var restoredPlayback = false;
 var autoplayPending = true;
 var exitFlushSent = false;
 var backgroundPauseInProgress = false;
+var lastPlaybackTickAt = 0;
 
 function loadPlaybackPosition() {
     try {
@@ -167,6 +168,25 @@ function pausePlaybackForBackground() {
     try {
         player.pauseVideo();
     } catch (e) {}
+}
+
+function accountPlaybackElapsed() {
+    if (!isPlaying) return 0;
+    var now = Date.now();
+    if (!lastPlaybackTickAt) {
+        lastPlaybackTickAt = now;
+        return 0;
+    }
+    var elapsedSeconds = Math.max(0, Math.floor((now - lastPlaybackTickAt) / 1000));
+    if (elapsedSeconds <= 0) {
+        return 0;
+    }
+    lastPlaybackTickAt += elapsedSeconds * 1000;
+    playSeconds += elapsedSeconds;
+    if (hasTimeLimit) {
+        remainingSeconds = Math.max(0, remainingSeconds - elapsedSeconds);
+    }
+    return elapsedSeconds;
 }
 
 function getFullscreenElement() {
@@ -293,6 +313,7 @@ function onPlayerStateChange(event) {
         isPlaying = true;
         exitFlushSent = false;
         autoplayPending = false;
+        lastPlaybackTickAt = Date.now();
         hidePauseOverlay();
         restorePlaybackPosition();
         startPositionSaving();
@@ -306,7 +327,9 @@ function onPlayerStateChange(event) {
             endCheckInterval = setInterval(checkNearEnd, 1000);
         }
     } else if (event.data === YT.PlayerState.ENDED) {
+        accountPlaybackElapsed();
         isPlaying = false;
+        lastPlaybackTickAt = 0;
         hidePauseOverlay();
         stopPositionSaving();
         clearPlaybackPosition();
@@ -315,7 +338,9 @@ function onPlayerStateChange(event) {
         if (playSeconds > 0) { sendHeartbeat(); }
         showEndOverlay();
     } else if (event.data === YT.PlayerState.PAUSED) {
+        accountPlaybackElapsed();
         isPlaying = false;
+        lastPlaybackTickAt = 0;
         if (backgroundPauseInProgress) {
             hidePauseOverlay();
             backgroundPauseInProgress = false;
@@ -332,7 +357,9 @@ function onPlayerStateChange(event) {
             sendHeartbeat();
         }
     } else {
+        accountPlaybackElapsed();
         isPlaying = false;
+        lastPlaybackTickAt = 0;
         backgroundPauseInProgress = false;
         stopPositionSaving();
         savePlaybackPosition();
@@ -431,8 +458,7 @@ function showEndOverlay() {
 
 function tickCountdown() {
     if (!isPlaying || !hasTimeLimit) return;
-    remainingSeconds--;
-    playSeconds++;
+    accountPlaybackElapsed();
     updateTimeDisplay();
 
     if (remainingSeconds <= 0) {
@@ -485,7 +511,9 @@ function updateTimeDisplay() {
 }
 
 function timesUp() {
+    accountPlaybackElapsed();
     isPlaying = false;
+    lastPlaybackTickAt = 0;
     clearInterval(heartbeatInterval); heartbeatInterval = null;
     clearInterval(countdownInterval); countdownInterval = null;
     clearInterval(endCheckInterval); endCheckInterval = null;
@@ -502,6 +530,7 @@ function timesUp() {
 }
 
 function sendHeartbeat() {
+    accountPlaybackElapsed();
     if (playSeconds <= 0) return;
     var secs = playSeconds;
     var positionSeconds = Math.floor(getCurrentPlaybackSeconds());
@@ -510,6 +539,7 @@ function sendHeartbeat() {
 }
 
 function flushWatchProgressOnExit() {
+    accountPlaybackElapsed();
     var positionSeconds = Math.floor(getCurrentPlaybackSeconds());
     if (playSeconds <= 0 && positionSeconds <= 0) return;
     if (exitFlushSent) return;
