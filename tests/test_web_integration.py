@@ -277,10 +277,12 @@ class TestPageLoads:
         resp = auth_client.get("/requests")
 
         assert resp.status_code == 200
+        assert "Pending Requests" in resp.text
         assert "Pending Request" in resp.text
+        assert "Approved by Request" in resp.text
         assert "Approved Request" in resp.text
         assert "Allowed Channel Video" not in resp.text
-        assert "Approved by Request" in resp.text
+        assert 'request-status-badge' not in resp.text
 
     def test_home_active_row_shows_watch_progress_bar_for_started_video(self, auth_client, store):
         cs = ChildStore(store, "default")
