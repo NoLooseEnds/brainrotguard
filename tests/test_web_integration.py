@@ -632,6 +632,9 @@ class TestWatchPage:
         assert "localStorage.setItem(playbackStorageKey" in resp.text
         assert "pagehide" in resp.text
         assert "exitFlushSent" in resp.text
+        assert "pausePlaybackForBackground" in resp.text
+        assert "window.addEventListener('blur'" in resp.text
+        assert "backgroundPauseInProgress" in resp.text
         assert "document.visibilityState === 'visible'" in resp.text
         assert "attemptAutoplayIfActive" in resp.text
         assert "brg-nav-history" in resp.text

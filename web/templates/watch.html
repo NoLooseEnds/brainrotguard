@@ -89,6 +89,7 @@ var positionSaveInterval = null;
 var restoredPlayback = false;
 var autoplayPending = true;
 var exitFlushSent = false;
+var backgroundPauseInProgress = false;
 
 function loadPlaybackPosition() {
     try {
@@ -157,6 +158,15 @@ function attemptAutoplayIfActive() {
     exitFlushSent = false;
     autoplayPending = false;
     player.playVideo();
+}
+
+function pausePlaybackForBackground() {
+    if (!player || !player.pauseVideo) return;
+    backgroundPauseInProgress = true;
+    autoplayPending = false;
+    try {
+        player.pauseVideo();
+    } catch (e) {}
 }
 
 function getFullscreenElement() {
@@ -306,7 +316,12 @@ function onPlayerStateChange(event) {
         showEndOverlay();
     } else if (event.data === YT.PlayerState.PAUSED) {
         isPlaying = false;
-        showPauseOverlay();
+        if (backgroundPauseInProgress) {
+            hidePauseOverlay();
+            backgroundPauseInProgress = false;
+        } else {
+            showPauseOverlay();
+        }
         stopPositionSaving();
         savePlaybackPosition();
         if (countdownInterval) {
@@ -318,6 +333,7 @@ function onPlayerStateChange(event) {
         }
     } else {
         isPlaying = false;
+        backgroundPauseInProgress = false;
         stopPositionSaving();
         savePlaybackPosition();
         if (countdownInterval) {
@@ -539,6 +555,12 @@ function doHeartbeat(secs, positionSeconds) {
 }
 
 window.addEventListener('pagehide', function() {
+    pausePlaybackForBackground();
+    savePlaybackPosition();
+    flushWatchProgressOnExit();
+});
+window.addEventListener('blur', function() {
+    pausePlaybackForBackground();
     savePlaybackPosition();
     flushWatchProgressOnExit();
 });
@@ -548,6 +570,7 @@ window.addEventListener('focus', function() {
 });
 document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'hidden') {
+        pausePlaybackForBackground();
         savePlaybackPosition();
         flushWatchProgressOnExit();
         return;
