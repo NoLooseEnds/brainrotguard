@@ -636,6 +636,7 @@ class TestWatchPage:
         assert "exitFlushSent" in resp.text
         assert "pausePlaybackForBackground" in resp.text
         assert "accountPlaybackElapsed" in resp.text
+        assert "exitFlushSent" in resp.text
         assert "lastPlaybackTickAt" in resp.text
         assert "window.addEventListener('blur'" in resp.text
         assert "backgroundPauseInProgress" in resp.text
