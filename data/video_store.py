@@ -482,6 +482,37 @@ class VideoStore:
         """Get all pending videos for a profile."""
         return self.get_by_status("pending", profile_id=profile_id)
 
+    def get_requested_approved(self, limit: int = 100, profile_id: str = "default") -> list[dict]:
+        """Get approved videos that are not currently covered by an allowlisted channel."""
+        with self._lock:
+            sql = """
+                SELECT v.*
+                FROM videos v
+                WHERE v.status = 'approved'
+                  AND v.profile_id = ?
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM channels c
+                    WHERE c.profile_id = v.profile_id
+                      AND c.status = 'allowed'
+                      AND (
+                        c.channel_name = v.channel_name COLLATE NOCASE
+                        OR (
+                          c.channel_id IS NOT NULL AND c.channel_id != ''
+                          AND v.channel_id IS NOT NULL AND v.channel_id != ''
+                          AND c.channel_id = v.channel_id
+                        )
+                      )
+                  )
+                ORDER BY COALESCE(v.last_viewed_at, v.decided_at, v.requested_at) DESC
+            """
+            params: list = [profile_id]
+            if limit > 0:
+                sql += " LIMIT ?"
+                params.append(limit)
+            cursor = self.conn.execute(sql, params)
+            return [dict(row) for row in cursor.fetchall()]
+
     def get_approved_page(self, page: int = 0, page_size: int = 24,
                           profile_id: str = "default") -> tuple[list[dict], int]:
         """Get a page of approved videos with total count for a profile."""

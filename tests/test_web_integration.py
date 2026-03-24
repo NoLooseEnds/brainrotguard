@@ -219,6 +219,27 @@ class TestPageLoads:
         assert 'rel="manifest" href="/manifest.webmanifest"' in resp.text
         assert 'navigator.serviceWorker.register("/service-worker.js")' in resp.text
 
+    def test_home_includes_requests_link(self, auth_client):
+        resp = auth_client.get("/")
+        assert resp.status_code == 200
+        assert 'href="/requests"' in resp.text
+
+    def test_requests_page_shows_pending_and_one_off_approved_videos(self, auth_client, store):
+        cs = ChildStore(store, "default")
+        cs.add_channel("Allowed Ch", "allowed", channel_id="UCallowed")
+        cs.add_video("pendreq1234", "Pending Request", "One Off Ch", channel_id="UConeoff", duration=180)
+        cs.add_video("apprreq1234", "Approved Request", "One Off Ch", channel_id="UConeoff", duration=180)
+        cs.update_status("apprreq1234", "approved")
+        cs.add_video("allowreq1234", "Allowed Channel Video", "Allowed Ch", channel_id="UCallowed", duration=180)
+        cs.update_status("allowreq1234", "approved")
+
+        resp = auth_client.get("/requests")
+
+        assert resp.status_code == 200
+        assert "Pending Request" in resp.text
+        assert "Approved Request" in resp.text
+        assert "Allowed Channel Video" not in resp.text
+        assert "Approved by Request" in resp.text
 
 
 class TestLimiterKey:
@@ -322,7 +343,7 @@ class TestSearchFlow:
             }
             for i in range(1, 7)
         ]
-        client = TestClient(app, raise_server_exceptions=False)
+        client = AppClient(app, raise_server_exceptions=False)
         _login(client, "1234")
 
         resp = client.get("/search?q=test+video")

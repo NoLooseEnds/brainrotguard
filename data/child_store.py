@@ -56,6 +56,9 @@ class ChildStore:
     def get_pending(self):
         return self._store.get_pending(profile_id=self.profile_id)
 
+    def get_requested_approved(self, limit=100):
+        return self._store.get_requested_approved(limit, profile_id=self.profile_id)
+
     def get_approved_page(self, page=0, page_size=24):
         return self._store.get_approved_page(page, page_size, profile_id=self.profile_id)
 

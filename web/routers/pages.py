@@ -100,3 +100,18 @@ async def activity_page(request: Request):
         "time_info": time_info,
         "cat_info": cat_info,
     })
+
+
+@router.get("/requests", response_class=HTMLResponse)
+async def requests_page(request: Request):
+    """Requested videos that are pending or approved outside allowlisted channels."""
+    cs = get_child_store(request)
+    pending_videos = cs.get_pending()
+    approved_videos = cs.get_requested_approved(limit=100)
+    annotate_categories(pending_videos, cs)
+    annotate_categories(approved_videos, cs)
+    return templates.TemplateResponse(request, "requests.html", {
+        **base_ctx(request),
+        "pending_videos": pending_videos,
+        "approved_videos": approved_videos,
+    })

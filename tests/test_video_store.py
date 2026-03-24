@@ -80,6 +80,17 @@ class TestVideoStoreVideoCRUD:
         assert len(video_store.get_approved()) == 1
         assert len(video_store.get_pending()) == 1
 
+    def test_get_requested_approved_excludes_allowlisted_channels(self, video_store):
+        video_store.add_channel("Allowed Ch", "allowed", channel_id="UCallowed")
+        video_store.add_video("allow123456", "Allowed Video", "Allowed Ch", channel_id="UCallowed")
+        video_store.update_status("allow123456", "approved")
+        video_store.add_video("req__123456", "Requested Video", "One Off Ch", channel_id="UConeoff")
+        video_store.update_status("req__123456", "approved")
+
+        approved = video_store.get_requested_approved()
+
+        assert [video["video_id"] for video in approved] == ["req__123456"]
+
     def test_find_video_fuzzy(self, video_store):
         video_store.add_video("a-b_c-d-e-f", "Fuzzy", "Ch")
         # Hyphens encoded as underscores

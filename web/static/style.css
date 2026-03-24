@@ -372,6 +372,63 @@ main {
     margin: 0 auto 32px;
 }
 
+.requests-page {
+    display: grid;
+    gap: 1.5rem;
+}
+
+.requests-page > .back-link {
+    justify-self: start;
+}
+
+.requests-page-section {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.requests-page-header {
+    margin-bottom: 0;
+}
+
+.request-grid {
+    gap: 1rem;
+}
+
+.request-video-card {
+    position: relative;
+}
+
+.request-status-badge {
+    position: absolute;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    backdrop-filter: blur(10px);
+}
+
+.request-status-badge-pending {
+    background: rgba(239, 179, 71, 0.9);
+    color: #1b1406;
+}
+
+.request-status-badge-approved {
+    background: rgba(212, 66, 46, 0.88);
+    color: #fff4ef;
+}
+
+.request-empty-state {
+    min-height: 0;
+}
+
 .pending-thumbnail {
     width: 100%;
     border-radius: var(--radius-card);
