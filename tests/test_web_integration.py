@@ -9,7 +9,9 @@ after application has started" issue with the shared singleton.
 
 import asyncio
 import html
+import mimetypes
 import re
+from urllib.parse import urlsplit
 
 import pytest
 import httpx
@@ -47,6 +49,24 @@ class AppClient:
 
     async def _request_async(self, method: str, url: str, **kwargs) -> httpx.Response:
         follow_redirects = kwargs.pop("follow_redirects", True)
+        path = urlsplit(url).path
+        request = httpx.Request(
+            method,
+            f"{self.base_url}{path}",
+            headers=kwargs.get("headers"),
+            content=kwargs.get("content"),
+        )
+        if method.upper() == "GET" and path.startswith("/static/"):
+            asset_path = static_dir / path.removeprefix("/static/")
+            if asset_path.is_file():
+                media_type = mimetypes.guess_type(asset_path.name)[0] or "application/octet-stream"
+                return httpx.Response(
+                    200,
+                    headers={"content-type": media_type},
+                    content=asset_path.read_bytes(),
+                    request=request,
+                )
+            return httpx.Response(404, request=request)
         transport = httpx.ASGITransport(
             app=self.app,
             raise_app_exceptions=self._raise_server_exceptions,
