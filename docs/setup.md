@@ -7,7 +7,7 @@ Full walkthrough for getting BrainRotGuard running. If you already know your way
 - [Step 2: Get Your Chat ID](#step-2-get-your-chat-id)
 - [Step 3: Install BrainRotGuard](#step-3-install-brainrotguard)
 - [Step 4: Start It Up](#step-4-start-it-up)
-- [Step 5: Block YouTube on the Kid's Devices](#step-5-block-youtube-on-the-kids-devices)
+- [Step 5: Lock Down the Kid's Device](#step-5-lock-down-the-kids-device)
 - [Using the Pre-Built Docker Image](#using-the-pre-built-docker-image)
 - [Installing on Unraid](#installing-on-unraid)
 - [Running Without Docker](#running-without-docker)
@@ -81,43 +81,33 @@ git pull
 docker compose up -d --build
 ```
 
-## Step 5: Block YouTube on the Kid's Devices
+## Step 5: Lock Down the Kid's Device
 
-Without this step, your kid can just open youtube.com in a browser or use the YouTube app and bypass BrainRotGuard entirely. DNS-level blocking prevents that — it makes YouTube unreachable on their devices while keeping BrainRotGuard's embedded playback working.
+Without this step, your kid can just open youtube.com in a browser or use the YouTube app and bypass BrainRotGuard entirely. The recommended approach is to install BrainRotGuard as a PWA and restrict browser access on the device.
 
-**Block these domains** (prevents direct YouTube access):
-- `youtube.com`
-- `www.youtube.com`
-- `m.youtube.com`
-- `youtubei.googleapis.com`
+### Android (Google Family Link)
 
-**Allow these domains** (required for embedded playback through BrainRotGuard):
-- `www.youtube-nocookie.com`
-- `*.googlevideo.com`
+1. **Install BrainRotGuard as a PWA**: Open Chrome on the kid's tablet, go to `http://<your-server-ip>:8080`, tap the menu (three dots) > **Add to Home screen**. This creates a standalone app.
+2. **Set up Family Link**: Install [Google Family Link](https://families.google.com/familylink/) on your phone and the kid's tablet.
+3. **Block browser apps**: In Family Link, go to **Controls** > **App limits** and block Chrome, Samsung Internet, and any other browser apps. The BrainRotGuard PWA will continue to work — it runs in its own app container.
+4. **Block the YouTube app**: Also block the YouTube and YouTube Kids apps if installed.
 
-### AdGuard Home
+### iOS / iPad (Screen Time)
 
-1. Go to **Filters** > **Custom filtering rules**
-2. Add blocking rules:
-   ```
-   ||youtube.com^
-   ||m.youtube.com^
-   ||youtubei.googleapis.com^
-   ```
-3. Add allowlist rules (under **DNS allowlists** or prefix with `@@`):
-   ```
-   @@||www.youtube-nocookie.com^
-   @@||googlevideo.com^
-   ```
-4. Under **Client settings**, apply these rules only to the kid's device if you don't want to block YouTube for everyone on your network
+1. **Install BrainRotGuard as a PWA**: Open Safari, go to `http://<your-server-ip>:8080`, tap **Share** > **Add to Home Screen**.
+2. **Enable Screen Time**: Go to **Settings** > **Screen Time** > **Content & Privacy Restrictions** > **Content Restrictions** > **Web Content**.
+3. **Limit websites**: Choose **Allowed Websites Only** and add your BrainRotGuard URL (e.g., `http://10.71.1.27:8080`). This blocks all other web browsing while keeping the PWA functional.
 
-### Pi-hole
+### Why not DNS blocking?
 
-Add the block domains to your blocklist and the allow domains to your allowlist. Same domains, just entered through the Pi-hole admin UI.
+Previously, this guide recommended blocking `youtube.com` via DNS (AdGuard Home, Pi-hole, etc.) while allowing `youtube-nocookie.com` for the embedded player. **This no longer works** — as of March 2026, YouTube's nocookie embed requires requests to `www.youtube.com` to function. Blocking that domain breaks video playback entirely. See [#36](https://github.com/GHJJ123/brainrotguard/issues/36) for details.
 
-### Other Options
-
-Any DNS filtering tool that lets you block/allow specific domains will work — pfBlockerNG, NextDNS, router-level parental controls, etc.
+DNS blocking is still fine as an additional layer, but you must allow `www.youtube.com` through:
+```
+@@||www.youtube.com^
+@@||www.youtube-nocookie.com^
+@@||googlevideo.com^
+```
 
 ## Using the Pre-Built Docker Image
 

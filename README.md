@@ -29,10 +29,9 @@ No YouTube account needed. No ads. No algorithmic rabbit holes. No "up next" aut
 
 ```
 Kid's Tablet ----> BrainRotGuard Server ----> Router ----> Telegram Cloud ----> Parent's Phone
-                                                |
-                                          DNS (AdGuard/Pi-hole)
-                                          X  youtube.com (blocked)
-                                          OK youtube-nocookie.com (allowed)
+                        |
+                  Tablet lockdown (Family Link / Screen Time)
+                  only BrainRotGuard PWA allowed
 ```
 
 1. Kid opens BrainRotGuard on their tablet and searches for a video
@@ -141,7 +140,7 @@ wget -O /boot/config/plugins/dockerMan/templates-user/my-brainrotguard.xml \
 ```
 See the [full Unraid setup guide](docs/setup.md#installing-on-unraid) for details.
 
-**Important:** You'll also want to [block YouTube at the DNS level](docs/setup.md#step-5-block-youtube-on-the-kids-devices) on the kid's devices — otherwise they can just open youtube.com directly.
+**Important:** You'll also want to [lock down the kid's device](docs/setup.md#step-5-lock-down-the-kids-device) so they can't bypass BrainRotGuard by opening YouTube directly.
 
 ## What You'll Need
 
@@ -151,15 +150,15 @@ See the [full Unraid setup guide](docs/setup.md#installing-on-unraid) for detail
 | **Docker** | [Install Docker](https://docs.docker.com/get-docker/) |
 | **Telegram account** | The messaging app where you'll receive approval requests |
 | **Telegram bot token** | Created in 5 minutes via [@BotFather](https://core.telegram.org/bots#how-do-i-create-a-bot) |
-| **DNS-level blocking** | [AdGuard Home](https://adguard.com/en/adguard-home/overview.html), [Pi-hole](https://pi-hole.net/), or router-level blocking |
+| **Device lockdown** | [Family Link](https://families.google.com/familylink/) (Android) or [Screen Time](https://support.apple.com/en-us/HT208982) (iOS) to restrict browser access |
 
 > **Why Telegram?** It was the easiest way to build instant notifications with approve/deny buttons that work from your phone. No custom app to develop, no push notification infrastructure to maintain — Telegram handles all of that.
 
-> **Network note:** BrainRotGuard runs on your home network. Your child's device needs to be on the same network (that's where DNS blocking and the web UI live). You can approve/deny from anywhere via Telegram — you don't need to be home for that part.
+> **Network note:** BrainRotGuard runs on your home network. Your child's device needs to be on the same network to access the web UI. You can approve/deny from anywhere via Telegram — you don't need to be home for that part.
 
 ## Documentation
 
-- **[Setup Guide](docs/setup.md)** — full walkthrough from Telegram bot creation to DNS blocking
+- **[Setup Guide](docs/setup.md)** — full walkthrough from Telegram bot creation to device lockdown
 - [Configuration Reference](docs/configuration.md) — config.yaml options, environment variables, defaults
 - [Locale Guide](i18n/locales/README.md) — how translations work and how to add a new language
 - [Telegram Commands](docs/telegram-commands.md) — full command list for the parent bot
